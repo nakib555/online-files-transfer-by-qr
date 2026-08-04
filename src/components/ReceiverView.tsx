@@ -75,29 +75,52 @@ export default function ReceiverView() {
   const requestRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  const forceRequestPermission = async () => {
+    setCameraError('');
+    addLog('info', 'Querying video devices. Explicit camera access requested...');
+    try {
+      // Force prompt browser for camera permission
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      // Clean up the stream immediately since we just wanted the hardware access consent
+      stream.getTracks().forEach(track => track.stop());
+      
+      // Enumerate devices now that permission is granted
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      setCameras(videoDevices);
+      
+      if (videoDevices.length > 0) {
+        // Prefer environment/back camera if available
+        const backCamera = videoDevices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('environment'));
+        setSelectedCameraId(backCamera ? backCamera.deviceId : videoDevices[0].deviceId);
+        addLog('success', `Permission granted! Found ${videoDevices.length} camera(s).`);
+      } else {
+        setCameraError('No video input hardware detected on your device.');
+        addLog('error', 'Camera hardware list returned empty.');
+      }
+    } catch (err: any) {
+      console.error('Camera permission request failed:', err);
+      let errMsg = 'Camera access denied or unavailable. Please enable permissions.';
+      if (err.name === 'NotAllowedError') {
+        errMsg = 'Camera permission was explicitly denied. Please reset permissions in your browser address bar.';
+      } else if (err.name === 'NotFoundError') {
+        errMsg = 'No camera hardware found on this system.';
+      }
+      setCameraError(errMsg);
+      addLog('error', `Permission request failed: ${err.message || err.name}`);
+    }
+  };
+
+  const handleToggleScanning = async () => {
+    if (!isScanning && cameras.length === 0) {
+      await forceRequestPermission();
+    }
+    setIsScanning(!isScanning);
+  };
+
   // Initialize and enumerate available camera hardware
   useEffect(() => {
-    async function initCameraList() {
-      try {
-        // Request initial permission to enumerate devices properly
-        await navigator.mediaDevices.getUserMedia({ video: true });
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(device => device.kind === 'videoinput');
-        setCameras(videoDevices);
-        
-        if (videoDevices.length > 0) {
-          // Prefer environment/back camera if available
-          const backCamera = videoDevices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('environment'));
-          setSelectedCameraId(backCamera ? backCamera.deviceId : videoDevices[0].deviceId);
-        }
-      } catch (err) {
-        console.error('Failed to list video devices:', err);
-        setCameraError('Camera access denied or unavailable. Please enable permissions.');
-        addLog('error', 'Camera hardware enumeration failed. Ingress permission required.');
-      }
-    }
-    initCameraList();
-
+    forceRequestPermission();
     return () => {
       stopCamera();
     };
@@ -479,17 +502,17 @@ export default function ReceiverView() {
         {/* Left Column: Viewfinder camera feed */}
         <div className="lg:col-span-6 flex flex-col gap-4">
           <div className="w-full border border-slate-200 bg-white rounded-2xl p-4 sm:p-5 relative overflow-hidden flex flex-col items-center">
-            {/* Viewfinder Target Reticle */}
-            <div className="absolute top-10 left-10 w-8 h-8 border-t-2 border-l-2 border-indigo-600 z-10 animate-pulse"></div>
-            <div className="absolute top-10 right-10 w-8 h-8 border-t-2 border-r-2 border-indigo-600 z-10 animate-pulse"></div>
-            <div className="absolute bottom-10 left-10 w-8 h-8 border-b-2 border-l-2 border-indigo-600 z-10 animate-pulse"></div>
-            <div className="absolute bottom-10 right-10 w-8 h-8 border-b-2 border-r-2 border-indigo-600 z-10 animate-pulse"></div>
-
             {/* Hidden Canvas used for frame processing */}
             <canvas ref={canvasRef} className="hidden" />
 
             {/* Video Feed */}
-            <div className="relative w-full aspect-[4/3] sm:aspect-video lg:aspect-[4/3] bg-slate-50 border border-slate-200 rounded-xl overflow-hidden flex items-center justify-center">
+            <div className="relative w-full max-w-md aspect-[4/3] sm:aspect-video lg:aspect-[4/3] bg-slate-50 border border-slate-200 rounded-xl overflow-hidden flex items-center justify-center mx-auto shadow-inner">
+              {/* Viewfinder Target Reticle - strictly inside the viewfinder to prevent overlapping layout anomalies */}
+              <div className="absolute top-4 left-4 w-6 h-6 border-t-2 border-l-2 border-indigo-600 z-10 animate-pulse"></div>
+              <div className="absolute top-4 right-4 w-6 h-6 border-t-2 border-r-2 border-indigo-600 z-10 animate-pulse"></div>
+              <div className="absolute bottom-4 left-4 w-6 h-6 border-b-2 border-l-2 border-indigo-600 z-10 animate-pulse"></div>
+              <div className="absolute bottom-4 right-4 w-6 h-6 border-b-2 border-r-2 border-indigo-600 z-10 animate-pulse"></div>
+
               {isScanning ? (
                 <video
                   ref={videoRef}
@@ -499,9 +522,29 @@ export default function ReceiverView() {
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center text-center p-4">
-                  <Camera className="w-12 h-12 text-slate-400 mb-3" />
-                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wide">Awaiting Scanner Activation</p>
-                  <p className="text-[10px] text-slate-500 mt-1 max-w-xs">Press "ACTIVATE SCANNER" to initialize secure sandbox webcam capture loop.</p>
+                  <Camera className="w-12 h-12 text-indigo-500/80 mb-3 animate-pulse" />
+                  {cameras.length === 0 ? (
+                    <>
+                      <p className="text-slate-700 font-bold text-xs uppercase tracking-wide">Camera Permission Required</p>
+                      <p className="text-[10px] text-slate-500 mt-1 max-w-xs mb-3">
+                        The secure optical receiver sandbox needs permission to access your device camera.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={forceRequestPermission}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-[10px] uppercase tracking-wider py-1.5 px-3 rounded shadow-sm cursor-pointer transition-all hover:scale-105"
+                      >
+                        Grant Camera Permission
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-slate-500 font-bold text-xs uppercase tracking-wide">Awaiting Scanner Activation</p>
+                      <p className="text-[10px] text-slate-500 mt-1 max-w-xs">
+                        Press "ACTIVATE SCANNER" to initialize secure sandbox webcam capture loop.
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -518,7 +561,7 @@ export default function ReceiverView() {
                 <select
                   value={selectedCameraId}
                   onChange={(e) => setSelectedCameraId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-600 tracking-wide font-mono select-none"
+                  className="flex-1 bg-slate-50 border border-slate-200 text-slate-700 rounded px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-600 tracking-wide font-mono select-none"
                   disabled={cameras.length === 0}
                 >
                   {cameras.length > 0 ? (
@@ -531,6 +574,14 @@ export default function ReceiverView() {
                     <option value="">AWAITING HARDWARE GRANTS...</option>
                   )}
                 </select>
+                <button
+                  type="button"
+                  onClick={forceRequestPermission}
+                  className="p-1.5 border border-slate-200 hover:border-indigo-500/30 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 rounded cursor-pointer transition-all"
+                  title="Force Ask Camera Permissions"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
               </div>
 
               {cameraError && (
@@ -542,7 +593,7 @@ export default function ReceiverView() {
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => setIsScanning(!isScanning)}
+                  onClick={handleToggleScanning}
                   className={`flex-1 py-3 px-4 rounded font-bold tracking-wider text-xs cursor-pointer transition-all flex items-center justify-center gap-2 ${
                     isScanning
                       ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40'

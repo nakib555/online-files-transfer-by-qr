@@ -25,6 +25,7 @@ export default function SenderView() {
   const [fps, setFps] = useState<number>(15);
   const [chunkSize, setChunkSize] = useState<number>(150);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [qrError, setQrError] = useState<string>('');
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const startTimeRef = useRef<number | null>(null);
@@ -140,6 +141,13 @@ export default function SenderView() {
         (error) => {
           if (error) {
             console.error('Error rendering QR code:', error);
+            if (!isCancelled) {
+              setQrError(error.message || 'QR code too big');
+            }
+          } else {
+            if (!isCancelled) {
+              setQrError('');
+            }
           }
         }
       );
@@ -339,6 +347,18 @@ export default function SenderView() {
                     <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
                   </div>
                 )}
+                {qrError && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/95 p-6 text-center z-20">
+                    <AlertCircle className="w-10 h-10 text-red-500 mb-2 animate-bounce" />
+                    <p className="text-red-600 font-bold text-xs uppercase tracking-wider">Payload Size Overflow</p>
+                    <p className="text-[10px] text-slate-500 mt-2 max-w-[280px] leading-relaxed">
+                      The current chunk size of <strong className="text-slate-800">{chunkSize} characters</strong> is too large to fit in a single QR frame.
+                    </p>
+                    <p className="text-[9px] text-indigo-500 mt-2 font-semibold">
+                      Please select the GIGA, CYBER, or BALANCED preset below.
+                    </p>
+                  </div>
+                )}
                 <div className="w-full aspect-square relative flex items-center justify-center">
                   <canvas
                     id="qr-transmitter-canvas"
@@ -518,9 +538,9 @@ export default function SenderView() {
               <div className="grid grid-cols-5 gap-1.5">
                 <button
                   type="button"
-                  onClick={() => handlePreset(240, 4096)}
+                  onClick={() => handlePreset(240, 1200)}
                   className={`p-2 rounded border text-left cursor-pointer transition-all ${
-                    fps === 240 && chunkSize === 4096
+                    fps === 240 && chunkSize === 1200
                       ? 'bg-indigo-600/10 border-indigo-600 text-indigo-500'
                       : 'bg-slate-50/40 border-slate-200 hover:border-slate-300 text-slate-500'
                   }`}
@@ -528,13 +548,13 @@ export default function SenderView() {
                 >
                   <span className="text-[9px] font-extrabold block">SUPREME</span>
                   <span className="text-[8px] text-slate-500 block">240 FPS</span>
-                  <span className="text-[8px] text-slate-500 block">4K Ch</span>
+                  <span className="text-[8px] text-slate-500 block">1.2K Ch</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => handlePreset(120, 2600)}
+                  onClick={() => handlePreset(120, 800)}
                   className={`p-2 rounded border text-left cursor-pointer transition-all ${
-                    fps === 120 && chunkSize === 2600
+                    fps === 120 && chunkSize === 800
                       ? 'bg-indigo-600/10 border-indigo-600 text-indigo-500'
                       : 'bg-slate-50/40 border-slate-200 hover:border-slate-300 text-slate-500'
                   }`}
@@ -542,13 +562,13 @@ export default function SenderView() {
                 >
                   <span className="text-[9px] font-extrabold block">GIGA</span>
                   <span className="text-[8px] text-slate-500 block">120 FPS</span>
-                  <span className="text-[8px] text-slate-500 block">2.6K Ch</span>
+                  <span className="text-[8px] text-slate-500 block">800 Ch</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => handlePreset(60, 500)}
+                  onClick={() => handlePreset(60, 400)}
                   className={`p-2 rounded border text-left cursor-pointer transition-all ${
-                    fps === 60 && chunkSize === 500
+                    fps === 60 && chunkSize === 400
                       ? 'bg-indigo-600/10 border-indigo-600 text-indigo-500'
                       : 'bg-slate-50/40 border-slate-200 hover:border-slate-300 text-slate-500'
                   }`}
@@ -556,7 +576,7 @@ export default function SenderView() {
                 >
                   <span className="text-[9px] font-extrabold block">CYBER</span>
                   <span className="text-[8px] text-slate-500 block">60 FPS</span>
-                  <span className="text-[8px] text-slate-500 block">500 Ch</span>
+                  <span className="text-[8px] text-slate-500 block">400 Ch</span>
                 </button>
                 <button
                   type="button"
@@ -621,7 +641,7 @@ export default function SenderView() {
                   <input
                     type="range"
                     min="50"
-                    max="4096"
+                    max="1800"
                     step="10"
                     value={chunkSize}
                     onChange={(e) => {
@@ -631,7 +651,7 @@ export default function SenderView() {
                   />
                   <div className="flex justify-between text-[9px] text-slate-400">
                     <span>50 CH (EASY SCAN)</span>
-                    <span>4096 CH (COMPACT GIGA-LINK)</span>
+                    <span>1800 CH (COMPACT SAFE-LINK)</span>
                   </div>
                 </div>
               </div>
