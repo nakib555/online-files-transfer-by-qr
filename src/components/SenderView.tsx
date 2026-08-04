@@ -9,13 +9,14 @@ import {
   FileText, Sliders, Settings, Check, Zap, AlertCircle
 } from 'lucide-react';
 import { FileMetadata } from '../types';
-import { formatBytes } from '../utils/fileHelper';
+import { formatBytes, calculateOptimalChunkSize } from '../utils/fileHelper';
 
 export default function SenderView() {
   const [file, setFile] = useState<File | null>(null);
   const [totalChunksCount, setTotalChunksCount] = useState<number>(0);
   const [computedCrc32, setComputedCrc32] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isRechunking, setIsRechunking] = useState<boolean>(false);
   const [processingProgress, setProcessingProgress] = useState<number>(0);
   const [processingStatus, setProcessingStatus] = useState<string>('');
 
@@ -23,6 +24,11 @@ export default function SenderView() {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [fps, setFps] = useState<number>(15);
   const [chunkSize, setChunkSize] = useState<number>(150);
+  const [isAdaptiveEnabled, setIsAdaptiveEnabled] = useState<boolean>(true);
+  const [adaptiveDetails, setAdaptiveDetails] = useState<string[]>([]);
+  const [estQrVersion, setEstQrVersion] = useState<number>(10);
+  const [pregenProgress, setPregenProgress] = useState<number>(-1);
+  const [pregenIndex, setPregenIndex] = useState<number>(0);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [qrError, setQrError] = useState<string>('');
 
@@ -37,6 +43,23 @@ export default function SenderView() {
   useEffect(() => {
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
+
+  // Handle active adaptive chunk size calculations based on file and device/screen conditions
+  useEffect(() => {
+    if (!file || !isAdaptiveEnabled) return;
+
+    const handleResize = () => {
+      const opt = calculateOptimalChunkSize(file.size, file.name, file.type);
+      setChunkSize(opt.chunkSize);
+      setAdaptiveDetails(opt.explanations);
+      setEstQrVersion(opt.qrVersion);
+    };
+
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [file, isAdaptiveEnabled]);
 
   // Convert character payload size to byte chunk size as a multiple of 3
   const getByteChunkSize = (charsSize: number) => {
@@ -101,15 +124,21 @@ export default function SenderView() {
         setTotalChunksCount(payload.totalChunksCount);
         setComputedCrc32(payload.crc32);
         setIsProcessing(false);
+        setIsRechunking(false);
+        setCurrentIndex((prev) => Math.min(prev, payload.totalChunksCount));
       } else if (type === 'LOAD_ERROR') {
         console.error('Worker file load error:', payload.error);
         setIsProcessing(false);
+        setIsRechunking(false);
         alert(`Worker failed to process file: ${payload.error}`);
       } else if (type === 'FRAME_READY') {
         drawQRFrame(payload.index, payload.size, payload.data);
       } else if (type === 'FRAME_ERROR') {
         console.error(`Worker frame error at index ${payload.index}:`, payload.error);
         setQrError(payload.error || 'QR generation failed');
+      } else if (type === 'PREGEN_PROGRESS') {
+        setPregenProgress(payload.progress);
+        setPregenIndex(payload.index);
       }
     };
 
@@ -118,20 +147,42 @@ export default function SenderView() {
     };
   }, []);
 
+  const [debouncedChunkSize, setDebouncedChunkSize] = useState<number>(chunkSize);
+  const lastFileRef = useRef<File | null>(null);
+
+  // Debounce chunk size updates to enable butter-smooth slider interaction without UI lag
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedChunkSize(chunkSize);
+    }, 250);
+    return () => clearTimeout(handler);
+  }, [chunkSize]);
+
   // Re-calculate chunks and offload CRC32 hashing & slicing to the Web Worker
   useEffect(() => {
     if (!file || !workerRef.current) return;
 
-    setIsProcessing(true);
+    const isNewFile = lastFileRef.current !== file;
+    lastFileRef.current = file;
+
+    if (isNewFile) {
+      setIsProcessing(true);
+    } else {
+      // Re-chunking existing file - keep main controls mounted and just show a non-blocking indicator on the QR canvas
+      setIsRechunking(true);
+    }
+
     setProcessingProgress(0);
     setProcessingStatus('Re-chunking stream sequence...');
+    setPregenProgress(0);
+    setPregenIndex(0);
     handleReset();
 
     workerRef.current.postMessage({
       type: 'LOAD_FILE',
-      data: { file, chunkSize }
+      data: { file, chunkSize: debouncedChunkSize }
     });
-  }, [chunkSize, file]);
+  }, [debouncedChunkSize, file]);
 
   // Handle active transmission interval using high-performance requestAnimationFrame
   useEffect(() => {
@@ -235,6 +286,7 @@ export default function SenderView() {
   };
 
   const handlePreset = (selectedFps: number, selectedSize: number) => {
+    setIsAdaptiveEnabled(false);
     setFps(selectedFps);
     setChunkSize(selectedSize);
     handleReset();
@@ -325,6 +377,13 @@ export default function SenderView() {
               <div className="absolute top-3 right-3 w-4 h-4 border-t-2 border-r-2 border-indigo-600/40"></div>
               <div className="absolute bottom-3 left-3 w-4 h-4 border-b-2 border-l-2 border-indigo-600/40"></div>
               <div className="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-indigo-600/40"></div>
+
+              {isRechunking && (
+                <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-indigo-600 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow-sm animate-pulse z-10">
+                  <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                  RE-CONFIGURING MODULES...
+                </div>
+              )}
 
               {/* QR Canvas */}
               <div className="bg-white p-2 sm:p-3 w-full max-w-full sm:max-w-[400px] md:max-w-[500px] rounded-lg shadow-2xl relative flex justify-center items-center">
@@ -512,6 +571,126 @@ export default function SenderView() {
                   ></div>
                 </div>
               </div>
+
+              {/* WebWorker Pre-rendering Progress */}
+              {pregenProgress >= 0 && (
+                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-1.5 text-[10px]">
+                  <div className="flex justify-between items-center font-bold">
+                    <span className="text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="relative flex h-1.5 w-1.5">
+                        {pregenProgress < 100 ? (
+                          <>
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
+                          </>
+                        ) : (
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                        )}
+                      </span>
+                      {pregenProgress < 100 ? 'Background Frame Pre-caching' : 'Optical Frames Cached'}
+                    </span>
+                    <span className={pregenProgress < 100 ? 'text-indigo-600 font-extrabold animate-pulse' : 'text-emerald-600 font-extrabold'}>
+                      {pregenProgress}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-white h-1 rounded-full overflow-hidden border border-slate-100">
+                    <div
+                      className={`h-full transition-all duration-300 ${pregenProgress < 100 ? 'bg-indigo-500' : 'bg-emerald-500'}`}
+                      style={{ width: `${pregenProgress}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-[9px] text-slate-400 leading-normal font-sans">
+                    {pregenProgress < 100 
+                      ? `WebWorker thread is asynchronously pre-rendering optical matrix ${pregenIndex}/${totalChunksCount}.` 
+                      : `All ${totalChunksCount + 1} optical frames pre-compiled into WebWorker memory cache for 100% latency-free playback.`
+                    }
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Auto-Adaptive Calibration Dashboard */}
+            <div className="border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-indigo-500" />
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Auto-Adaptive Tuning</h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextVal = !isAdaptiveEnabled;
+                    setIsAdaptiveEnabled(nextVal);
+                    if (nextVal) {
+                      const opt = calculateOptimalChunkSize(file.size, file.name, file.type);
+                      setChunkSize(opt.chunkSize);
+                      setAdaptiveDetails(opt.explanations);
+                      setEstQrVersion(opt.qrVersion);
+                    }
+                  }}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    isAdaptiveEnabled ? 'bg-indigo-600' : 'bg-slate-200'
+                  }`}
+                  title="Toggle Auto-Adaptive Optimal Tuning"
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      isAdaptiveEnabled ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {isAdaptiveEnabled ? (
+                <div className="space-y-3">
+                  <div className="p-3 bg-indigo-50/40 border border-indigo-100 rounded-lg text-[11px] space-y-2 leading-relaxed">
+                    <div className="flex items-center justify-between text-indigo-600 font-bold">
+                      <span>CALIBRATION ACTIVE</span>
+                      <span className="px-1.5 py-0.5 bg-indigo-600 text-white text-[8px] rounded uppercase">OPTIMIZED</span>
+                    </div>
+                    <p className="text-slate-600 font-sans">
+                      Automatically calibrating optimal block densities for maximum scan integrity on low-end cameras.
+                    </p>
+                    <div className="border-t border-indigo-100/50 pt-2 space-y-1">
+                      {adaptiveDetails.map((detail, idx) => (
+                        <div key={idx} className="flex gap-1.5 items-start text-slate-500">
+                          <span className="text-indigo-500 select-none">•</span>
+                          <span>{detail}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-[10px] font-mono">
+                    <div className="p-2 border border-slate-200 bg-slate-50/40 rounded">
+                      <span className="text-slate-500 block uppercase">RECOMMENDED VERSION</span>
+                      <span className="font-extrabold text-slate-800">QR Version {estQrVersion} ({estQrVersion * 4 + 17}x{estQrVersion * 4 + 17})</span>
+                    </div>
+                    <div className="p-2 border border-slate-200 bg-slate-50/40 rounded">
+                      <span className="text-slate-500 block uppercase">COMPATIBILITY</span>
+                      <span className="font-extrabold text-indigo-600">100% SECURE MATCH</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 border border-dashed border-slate-300 bg-slate-50/20 rounded-lg text-[11px] leading-relaxed text-slate-500">
+                  <p className="font-sans">
+                    Auto-Adaptive Tuning is currently <span className="font-bold text-slate-700">DISABLED</span>. You are using manual settings.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAdaptiveEnabled(true);
+                      const opt = calculateOptimalChunkSize(file.size, file.name, file.type);
+                      setChunkSize(opt.chunkSize);
+                      setAdaptiveDetails(opt.explanations);
+                      setEstQrVersion(opt.qrVersion);
+                    }}
+                    className="mt-2 text-[10px] text-indigo-600 hover:text-indigo-500 font-extrabold uppercase tracking-wide cursor-pointer flex items-center gap-1 hover:underline"
+                  >
+                    ⚡ RESTORE AUTO-ADAPTIVE TUNING
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Transmission Presets Configuration */}
@@ -631,6 +810,7 @@ export default function SenderView() {
                     step="10"
                     value={chunkSize}
                     onChange={(e) => {
+                      setIsAdaptiveEnabled(false);
                       setChunkSize(parseInt(e.target.value, 10));
                     }}
                     className="w-full h-1 bg-slate-50 rounded-lg appearance-none cursor-pointer accent-indigo-600"

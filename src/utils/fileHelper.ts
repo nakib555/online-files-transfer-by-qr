@@ -63,6 +63,73 @@ export class CRC32 {
 }
 
 /**
+ * Dynamically calculates optimal chunk size based on device screen resolution and data density.
+ * Ensures resulting QR codes are highly scannable by low-end cameras.
+ */
+export function calculateOptimalChunkSize(
+  fileSize: number,
+  fileName: string,
+  fileType: string
+): { chunkSize: number; explanations: string[]; qrVersion: number } {
+  // Baseline characters for general balanced operations
+  let optimal = 200; 
+  const explanations: string[] = [];
+
+  // 1. Device Screen Resolution & Viewport constraints
+  const width = typeof window !== 'undefined' ? (window.screen?.width || window.innerWidth) : 1024;
+  const height = typeof window !== 'undefined' ? (window.screen?.height || window.innerHeight) : 768;
+  const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 2;
+  const minDim = Math.min(width, height);
+
+  if (minDim < 480) {
+    optimal = 110;
+    explanations.push("Small mobile screen detected (reducing density to maximize module physical size)");
+  } else if (minDim < 768) {
+    optimal = 160;
+    explanations.push("Medium mobile/tablet screen detected (adjusting payload for optical alignment)");
+  } else {
+    optimal = 260;
+    explanations.push("Large high-resolution desktop screen active");
+  }
+
+  if (dpr < 2) {
+    optimal = Math.round(optimal * 0.8);
+    explanations.push("Low-density display detected (reducing grid density to prevent blur scanner failures)");
+  }
+
+  // 2. Data Density / Entropy analysis
+  const isBinary = 
+    /(\.zip|\.tar|\.gz|\.pdf|\.png|\.jpg|\.jpeg|\.mp3|\.mp4|\.gif|\.bin|\.exe|\.dmg|\.iso|\.tar\.gz)$/i.test(fileName) ||
+    (fileType && !/^(text\/|application\/json|application\/javascript|application\/xml)/.test(fileType));
+
+  if (isBinary) {
+    optimal = Math.round(optimal * 0.85);
+    explanations.push("High-entropy binary stream detected (minimized to prevent overly dense QR matrix grid)");
+  } else {
+    optimal = Math.round(optimal * 1.15);
+    explanations.push("Low-entropy plain text stream detected (optimized with higher packing density)");
+  }
+
+  // Ensure reasonable scannable bounds (80 characters to 600 characters)
+  // Low-end cameras struggle immensely above 400 chars. Let's keep optimal highly scannable.
+  optimal = Math.max(80, Math.min(600, Math.round(optimal / 10) * 10));
+
+  // Determine estimated QR version for the optimal character count
+  let estVersion = 10;
+  if (optimal <= 100) estVersion = 7;
+  else if (optimal <= 160) estVersion = 11;
+  else if (optimal <= 240) estVersion = 15;
+  else if (optimal <= 340) estVersion = 20;
+  else estVersion = 27;
+
+  return {
+    chunkSize: optimal,
+    explanations,
+    qrVersion: estVersion
+  };
+}
+
+/**
  * Reassembles raw base64 data from a record of chunk index and chunk payload.
  */
 export function reassembleBase64(base64Chunks: Record<number, string>): string {

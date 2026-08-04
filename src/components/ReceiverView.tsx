@@ -6,7 +6,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Camera, CheckCircle2, AlertTriangle, RefreshCw, 
-  Activity, Video, Download, Play, Pause, ListFilter
+  Activity, Video, Download, Play, Pause, ListFilter, Sliders
 } from 'lucide-react';
 import { FileMetadata, ReceiverLog, SavedSession } from '../types';
 import { 
@@ -25,8 +25,18 @@ export default function ReceiverView() {
     topRight: { x: number; y: number };
     bottomRight: { x: number; y: number };
     bottomLeft: { x: number; y: number };
+    opacity: number;
   } | null>(null);
-  const qrLocationTimeoutRef = useRef<any>(null);
+  const [scanResolutionMode, setScanResolutionMode] = useState<'auto' | 'high-res' | 'high-speed'>('auto');
+  
+  const smoothedLocationRef = useRef<{
+    topLeft: { x: number; y: number };
+    topRight: { x: number; y: number };
+    bottomRight: { x: number; y: number };
+    bottomLeft: { x: number; y: number };
+  } | null>(null);
+  const lastDetectedTimeRef = useRef<number>(0);
+  const scanResolutionModeRef = useRef<'auto' | 'high-res' | 'high-speed'>('auto');
   
   // Storage for chunks: key is chunk index, value is the base64 payload
   const [capturedChunks, setCapturedChunks] = useState<Record<number, string>>({});
@@ -34,6 +44,8 @@ export default function ReceiverView() {
   const [cameraError, setCameraError] = useState<string>('');
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>([]);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
+  const [verificationProgress, setVerificationProgress] = useState<number>(0);
+  const [verificationStatus, setVerificationStatus] = useState<string>('');
   const [transferSpeed, setTransferSpeed] = useState<number>(0);
   const [isHapticEnabled, setIsHapticEnabled] = useState<boolean>(() => {
     try {
@@ -102,14 +114,9 @@ export default function ReceiverView() {
     isHapticEnabledRef.current = isHapticEnabled;
   }, [isHapticEnabled]);
 
-  // Clean up timers on unmount
   useEffect(() => {
-    return () => {
-      if (qrLocationTimeoutRef.current) {
-        clearTimeout(qrLocationTimeoutRef.current);
-      }
-    };
-  }, []);
+    scanResolutionModeRef.current = scanResolutionMode;
+  }, [scanResolutionMode]);
 
   const forceRequestPermission = async () => {
     setCameraError('');
@@ -332,9 +339,24 @@ export default function ReceiverView() {
       let targetWidth = video.videoWidth;
       let targetHeight = video.videoHeight;
 
-      // Scale down image to 720px max dimension for excellent balance of speed and high-density QR decoding accuracy!
-      // This is crucial: 480px was too low for the high density QR code, but 720px is perfect.
-      const maxDimension = 720;
+      // Determine the maximum dimension dynamically for standard speed vs ultra-density vs high-speed
+      let maxDimension = 720;
+      const currentMode = scanResolutionModeRef.current;
+      if (currentMode === 'high-res') {
+        maxDimension = 1920; // Allow 1080p full resolution
+      } else if (currentMode === 'high-speed') {
+        maxDimension = 600; // Faster processing
+      } else if (currentMode === 'auto') {
+        const timeSinceLastDecode = now - lastDetectedTimeRef.current;
+        if (timeSinceLastDecode > 1500) {
+          // If we haven't seen a QR frame in over 1.5 seconds, start checking full resolution
+          // on alternating frames to capture any ultra-dense QR codes without missing a beat!
+          maxDimension = (now % 2 === 0) ? 1280 : 720;
+        } else {
+          maxDimension = 720;
+        }
+      }
+
       if (targetWidth > maxDimension || targetHeight > maxDimension) {
         if (targetWidth > targetHeight) {
           targetHeight = Math.round((targetHeight * maxDimension) / targetWidth);
@@ -407,24 +429,66 @@ export default function ReceiverView() {
                 };
               };
 
-              setQrLocation({
+              const targetLocation = {
                 topLeft: transformPoint(location.topLeftCorner),
                 topRight: transformPoint(location.topRightCorner),
                 bottomRight: transformPoint(location.bottomRightCorner),
                 bottomLeft: transformPoint(location.bottomLeftCorner),
-              });
+              };
 
-              if (qrLocationTimeoutRef.current) {
-                clearTimeout(qrLocationTimeoutRef.current);
+              // Interpolation-based coordinates stabilization to eliminate jitter completely
+              if (!smoothedLocationRef.current) {
+                smoothedLocationRef.current = targetLocation;
+              } else {
+                const k = 0.35; // Smoothing coefficient
+                smoothedLocationRef.current = {
+                  topLeft: {
+                    x: smoothedLocationRef.current.topLeft.x * (1 - k) + targetLocation.topLeft.x * k,
+                    y: smoothedLocationRef.current.topLeft.y * (1 - k) + targetLocation.topLeft.y * k,
+                  },
+                  topRight: {
+                    x: smoothedLocationRef.current.topRight.x * (1 - k) + targetLocation.topRight.x * k,
+                    y: smoothedLocationRef.current.topRight.y * (1 - k) + targetLocation.topRight.y * k,
+                  },
+                  bottomRight: {
+                    x: smoothedLocationRef.current.bottomRight.x * (1 - k) + targetLocation.bottomRight.x * k,
+                    y: smoothedLocationRef.current.bottomRight.y * (1 - k) + targetLocation.bottomRight.y * k,
+                  },
+                  bottomLeft: {
+                    x: smoothedLocationRef.current.bottomLeft.x * (1 - k) + targetLocation.bottomLeft.x * k,
+                    y: smoothedLocationRef.current.bottomLeft.y * (1 - k) + targetLocation.bottomLeft.y * k,
+                  },
+                };
               }
-              qrLocationTimeoutRef.current = setTimeout(() => {
-                setQrLocation(null);
-              }, 180);
+
+              lastDetectedTimeRef.current = now;
             }
           }
         }
       } catch (err) {
         console.error('Error during QR decoding:', err);
+      }
+
+      // Compute smoothed visualization state with lock-on decay (grace period fade out)
+      if (smoothedLocationRef.current) {
+        const msSinceDetect = now - lastDetectedTimeRef.current;
+        if (msSinceDetect < 550) {
+          // Keep displaying tracking box; start fading out smoothly after 150ms of frame loss
+          const opacity = msSinceDetect > 150
+            ? Math.max(0.1, 1 - (msSinceDetect - 150) / 400)
+            : 1;
+
+          setQrLocation({
+            ...smoothedLocationRef.current,
+            opacity
+          });
+        } else {
+          // Decay limit reached: reset smooth position and clean up tracker overlay
+          smoothedLocationRef.current = null;
+          setQrLocation(null);
+        }
+      } else {
+        setQrLocation(null);
       }
     }
 
@@ -581,55 +645,108 @@ export default function ReceiverView() {
     if (allCollected && isScanning) {
       setIsScanning(false);
       setIsVerifying(true);
+      setVerificationProgress(0);
+      setVerificationStatus('Spawning background CRC32 worker...');
       addLog('info', `All ${totalChunksExpected} segments harvested. Running Cyclic Redundancy Check (CRC32)...`);
       
       const sessionId = `optgap:${metadata.name}:${metadata.size}:${metadata.crc32}`;
       
-      // Async verify and download
-      (async () => {
-        try {
-          const crcCalc = new CRC32();
-          // Sequentially calculate progressive CRC of chunks from IndexedDB
-          for (let i = 1; i <= totalChunksExpected; i++) {
-            const payload = await getChunkFromDB(sessionId, i);
-            if (payload === null) {
-              throw new Error(`Chunk segment ${i} is missing from cache database`);
+      try {
+        const valWorker = new Worker(
+          new URL('../utils/receiver-validation.worker.ts', import.meta.url),
+          { type: 'module' }
+        );
+
+        valWorker.onmessage = (e) => {
+          const { type, ...payload } = e.data;
+
+          if (type === 'VALIDATE_PROGRESS') {
+            setVerificationProgress(payload.progress);
+            setVerificationStatus(`Verifying blocks: ${payload.currentChunk} / ${payload.totalChunks}`);
+          } else if (type === 'VALIDATE_COMPLETE') {
+            const { computedCrc, expectedCrc, isMatched } = payload;
+
+            if (isMatched) {
+              // Trigger beautiful multi-pulse success haptic pattern
+              if (isHapticEnabled && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+                navigator.vibrate([100, 50, 100, 50, 150]);
+              }
+
+              addLog('success', `CRC32 verified successfully! [${computedCrc} === ${expectedCrc}]`);
+              addLog('info', 'Reassembling segments and compiling binary file stream...');
+              
+              downloadFileFromDB(sessionId, metadata)
+                .then(() => {
+                  addLog('success', `Reconstructed binary package: "${metadata.name}" compiled and downloaded.`);
+                })
+                .catch((err) => {
+                  addLog('error', `Download compilation failed: ${err.message}`);
+                })
+                .finally(() => {
+                  // Clean up session storage
+                  clearSession(sessionId);
+                  loadSavedSessions();
+                  setIsVerifying(false);
+                  valWorker.terminate();
+                });
+            } else {
+              // Trigger heavy alerting double buzz pattern for transfer/CRC mismatch failures
+              if (isHapticEnabled && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+                navigator.vibrate([300, 100, 300]);
+              }
+
+              addLog('error', `CRC32 MISMATCH DETECTED! Expected: [${expectedCrc}] but computed: [${computedCrc}]. Integrity check failed.`);
+              setIsVerifying(false);
+              valWorker.terminate();
             }
-            crcCalc.update(payload);
+          } else if (type === 'VALIDATE_ERROR') {
+            addLog('error', `Validation Worker error: ${payload.error || 'unknown calculation failure'}`);
+            setIsVerifying(false);
+            valWorker.terminate();
           }
+        };
 
-          const computedCrc = crcCalc.getValue();
-          const expectedCrc = metadata.crc32;
-
-          if (computedCrc === expectedCrc) {
-            // Trigger beautiful multi-pulse success haptic pattern
-            if (isHapticEnabled && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-              navigator.vibrate([100, 50, 100, 50, 150]);
-            }
-
-            addLog('success', `CRC32 verified successfully! [${computedCrc} === ${expectedCrc}]`);
-            addLog('info', 'Reassembling segments and compiling binary file stream...');
-            
-            await downloadFileFromDB(sessionId, metadata);
-            addLog('success', `Reconstructed binary package: "${metadata.name}" compiled and downloaded.`);
-            
-            // Clean up session storage
-            clearSession(sessionId);
-            loadSavedSessions();
-          } else {
-            // Trigger heavy alerting double buzz pattern for transfer/CRC mismatch failures
-            if (isHapticEnabled && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-              navigator.vibrate([300, 100, 300]);
-            }
-
-            addLog('error', `CRC32 MISMATCH DETECTED! Expected: [${expectedCrc}] but computed: [${computedCrc}]. Integrity check failed.`);
+        valWorker.postMessage({
+          type: 'VALIDATE_CRC',
+          data: {
+            sessionId,
+            totalChunksExpected,
+            expectedCrc: metadata.crc32
           }
-        } catch (err: any) {
-          addLog('error', `Assembly/Verification error: ${err.message || 'corruption in data streams'}`);
-        } finally {
-          setIsVerifying(false);
-        }
-      })();
+        });
+
+      } catch (workerErr: any) {
+        addLog('warning', `Failed to spin up WebWorker. Falling back to inline validation.`);
+        // Inline fallback (rare, only if browser strictly disallows modular workers)
+        (async () => {
+          try {
+            const crcCalc = new CRC32();
+            for (let i = 1; i <= totalChunksExpected; i++) {
+              const payload = await getChunkFromDB(sessionId, i);
+              if (payload === null) throw new Error(`Chunk ${i} missing`);
+              crcCalc.update(payload);
+              if (i % 5 === 0) {
+                setVerificationProgress(Math.round((i / totalChunksExpected) * 100));
+                setVerificationStatus(`Verifying blocks: ${i} / ${totalChunksExpected}`);
+              }
+            }
+            const computedCrc = crcCalc.getValue();
+            const expectedCrc = metadata.crc32;
+            if (computedCrc === expectedCrc) {
+              addLog('success', `CRC32 verified (fallback)!`);
+              await downloadFileFromDB(sessionId, metadata);
+              clearSession(sessionId);
+              loadSavedSessions();
+            } else {
+              addLog('error', `CRC32 mismatch (fallback): [${computedCrc} !== ${expectedCrc}]`);
+            }
+          } catch (fallbackErr: any) {
+            addLog('error', `Fallback failed: ${fallbackErr.message}`);
+          } finally {
+            setIsVerifying(false);
+          }
+        })();
+      }
     }
   }, [capturedChunks, metadata, isScanning, isVerifying]);
 
@@ -754,28 +871,33 @@ export default function ReceiverView() {
                   {/* Glowing semi-transparent polygon over the QR code */}
                   <polygon
                     points={`${qrLocation.topLeft.x},${qrLocation.topLeft.y} ${qrLocation.topRight.x},${qrLocation.topRight.y} ${qrLocation.bottomRight.x},${qrLocation.bottomRight.y} ${qrLocation.bottomLeft.x},${qrLocation.bottomLeft.y}`}
-                    fill="rgba(99, 102, 241, 0.18)"
-                    stroke="#4f46e5"
+                    fill={`rgba(99, 102, 241, ${0.18 * qrLocation.opacity})`}
+                    stroke={`rgba(79, 70, 229, ${qrLocation.opacity})`}
                     strokeWidth="3.5"
                     strokeLinejoin="round"
-                    className="animate-pulse shadow-lg"
+                    className="shadow-lg"
+                    style={{ transition: 'fill 100ms, stroke 100ms' }}
                   />
 
                   {/* Tracking dot elements on the corners */}
-                  <circle cx={qrLocation.topLeft.x} cy={qrLocation.topLeft.y} r="6" fill="#4f46e5" className="animate-ping" />
-                  <circle cx={qrLocation.topLeft.x} cy={qrLocation.topLeft.y} r="3" fill="#6366f1" />
+                  <circle cx={qrLocation.topLeft.x} cy={qrLocation.topLeft.y} r="6" fill="#4f46e5" fillOpacity={qrLocation.opacity * 0.4} className="animate-ping" />
+                  <circle cx={qrLocation.topLeft.x} cy={qrLocation.topLeft.y} r="3" fill="#6366f1" fillOpacity={qrLocation.opacity} />
 
-                  <circle cx={qrLocation.topRight.x} cy={qrLocation.topRight.y} r="6" fill="#4f46e5" className="animate-ping" />
-                  <circle cx={qrLocation.topRight.x} cy={qrLocation.topRight.y} r="3" fill="#6366f1" />
+                  <circle cx={qrLocation.topRight.x} cy={qrLocation.topRight.y} r="6" fill="#4f46e5" fillOpacity={qrLocation.opacity * 0.4} className="animate-ping" />
+                  <circle cx={qrLocation.topRight.x} cy={qrLocation.topRight.y} r="3" fill="#6366f1" fillOpacity={qrLocation.opacity} />
 
-                  <circle cx={qrLocation.bottomRight.x} cy={qrLocation.bottomRight.y} r="6" fill="#4f46e5" className="animate-ping" />
-                  <circle cx={qrLocation.bottomRight.x} cy={qrLocation.bottomRight.y} r="3" fill="#6366f1" />
+                  <circle cx={qrLocation.bottomRight.x} cy={qrLocation.bottomRight.y} r="6" fill="#4f46e5" fillOpacity={qrLocation.opacity * 0.4} className="animate-ping" />
+                  <circle cx={qrLocation.bottomRight.x} cy={qrLocation.bottomRight.y} r="3" fill="#6366f1" fillOpacity={qrLocation.opacity} />
 
-                  <circle cx={qrLocation.bottomLeft.x} cy={qrLocation.bottomLeft.y} r="6" fill="#4f46e5" className="animate-ping" />
-                  <circle cx={qrLocation.bottomLeft.x} cy={qrLocation.bottomLeft.y} r="3" fill="#6366f1" />
+                  <circle cx={qrLocation.bottomLeft.x} cy={qrLocation.bottomLeft.y} r="6" fill="#4f46e5" fillOpacity={qrLocation.opacity * 0.4} className="animate-ping" />
+                  <circle cx={qrLocation.bottomLeft.x} cy={qrLocation.bottomLeft.y} r="3" fill="#6366f1" fillOpacity={qrLocation.opacity} />
 
                   {/* "SECURE MATCH" status tooltip attached to the top edge of the selection bounding box */}
-                  <g transform={`translate(${(qrLocation.topLeft.x + qrLocation.topRight.x) / 2}, ${Math.min(qrLocation.topLeft.y, qrLocation.topRight.y) - 14})`}>
+                  <g 
+                    transform={`translate(${(qrLocation.topLeft.x + qrLocation.topRight.x) / 2}, ${Math.min(qrLocation.topLeft.y, qrLocation.topRight.y) - 14})`}
+                    opacity={qrLocation.opacity}
+                    style={{ transition: 'opacity 100ms' }}
+                  >
                     <rect
                       x="-55"
                       y="-12"
@@ -805,7 +927,7 @@ export default function ReceiverView() {
               )}
             </div>
 
-            {/* Camera Controls Footer */}
+             {/* Camera Controls Footer */}
             <div className="w-full mt-4 space-y-3">
               <div className="flex items-center gap-2">
                 <Video className="w-4 h-4 text-slate-500" />
@@ -833,6 +955,54 @@ export default function ReceiverView() {
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
+              </div>
+
+              {/* Camera Resolution & Density Tuning Selector */}
+              <div className="border-t border-slate-100 pt-2.5 space-y-1.5">
+                <div className="flex justify-between items-center px-0.5">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <Sliders className="w-3.5 h-3.5 text-indigo-500" />
+                    Density Resolution Tuning
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 bg-indigo-600/10 text-indigo-500 rounded font-extrabold uppercase">
+                    {scanResolutionMode === 'auto' ? 'Dynamic Auto' : scanResolutionMode === 'high-res' ? 'Ultra-Res (1080p)' : 'High-Speed (600p)'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-1 bg-slate-50 p-1 rounded border border-slate-200 text-[10px] font-mono">
+                  <button
+                    type="button"
+                    onClick={() => setScanResolutionMode('auto')}
+                    className={`py-1 px-1.5 rounded text-center cursor-pointer font-bold uppercase tracking-wider transition-all ${
+                      scanResolutionMode === 'auto'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+                    }`}
+                  >
+                    Auto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScanResolutionMode('high-res')}
+                    className={`py-1 px-1.5 rounded text-center cursor-pointer font-bold uppercase tracking-wider transition-all ${
+                      scanResolutionMode === 'high-res'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+                    }`}
+                  >
+                    Ultra-Res
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScanResolutionMode('high-speed')}
+                    className={`py-1 px-1.5 rounded text-center cursor-pointer font-bold uppercase tracking-wider transition-all ${
+                      scanResolutionMode === 'high-speed'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+                    }`}
+                  >
+                    High-Speed
+                  </button>
+                </div>
               </div>
 
               {/* Tactile Haptic Clicks toggle switch */}
@@ -970,19 +1140,19 @@ export default function ReceiverView() {
             {/* Total progress bar */}
             <div className="space-y-2 pt-1">
               <div className="flex justify-between text-[11px] font-bold">
-                <span className="text-slate-500">{isVerifying ? 'HASH SUM CALCULATION' : 'PACKET HARVEST DENSITY'}</span>
-                <span className={isVerifying ? 'text-amber-400 animate-pulse' : 'text-indigo-500'}>
-                  {isVerifying ? 'COMPUTING...' : `${getPercentage()}%`}
+                <span className="text-slate-500 uppercase tracking-wider">{isVerifying ? (verificationStatus || 'HASH SUM CALCULATION') : 'PACKET HARVEST DENSITY'}</span>
+                <span className={isVerifying ? 'text-amber-500 animate-pulse' : 'text-indigo-500'}>
+                  {isVerifying ? `${verificationProgress}%` : `${getPercentage()}%`}
                 </span>
               </div>
               <div className="w-full bg-slate-50 h-2.5 rounded-full overflow-hidden border border-slate-200">
                 <div
                   className={`h-full transition-all duration-300 ${
                     isVerifying 
-                      ? 'bg-amber-500 animate-pulse w-full shadow-[0_0_10px_rgba(245,158,11,0.4)]' 
+                      ? 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]' 
                       : 'bg-indigo-600 shadow-[0_0_10px_rgba(16,185,129,0.4)]'
                   }`}
-                  style={{ width: isVerifying ? '100%' : `${getPercentage()}%` }}
+                  style={{ width: isVerifying ? `${verificationProgress}%` : `${getPercentage()}%` }}
                 ></div>
               </div>
             </div>

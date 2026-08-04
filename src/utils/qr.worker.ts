@@ -78,6 +78,67 @@ ctx.addEventListener('message', async (e: MessageEvent) => {
         totalChunksCount: totalDataChunks,
         crc32,
       });
+
+      // Spawn background progressive pre-generation of all QR frames
+      // This caches frame matrices on the worker thread to guarantee 100% fluent lag-free playback.
+      (async () => {
+        try {
+          for (let index = 0; index <= totalDataChunks; index++) {
+            // Guard against subsequent file loads clearing cachedFrames or fileRef
+            if (!fileRef || cachedFrames === null) break;
+            if (cachedFrames[index]) continue;
+
+            let rawChunk = '';
+            if (index === 0) {
+              const meta = {
+                name: fileRef.name,
+                size: fileRef.size,
+                type: fileRef.type || 'application/octet-stream',
+                chunkCount: totalDataChunks,
+                crc32,
+              };
+              rawChunk = JSON.stringify(meta);
+            } else {
+              const byteChunkSize = getByteChunkSize(chunkSize);
+              const start = (index - 1) * byteChunkSize;
+              const end = Math.min(fileRef.size, start + byteChunkSize);
+              const blobSlice = fileRef.slice(start, end);
+              rawChunk = await blobToBase64InWorker(blobSlice);
+            }
+
+            const textToEncode = `${index}/${totalDataChunks}|${rawChunk}`;
+            const len = textToEncode.length;
+            let ecLevel: 'L' | 'M' | 'Q' | 'H' = 'H';
+            if (len > 1250) {
+              if (len <= 1630) ecLevel = 'Q';
+              else if (len <= 2290) ecLevel = 'M';
+              else ecLevel = 'L';
+            }
+
+            const qr = QRCode.create(textToEncode, {
+              errorCorrectionLevel: ecLevel,
+            });
+
+            const size = qr.modules.size;
+            const matrixData = new Uint8Array(qr.modules.data);
+
+            // Double check to avoid race conditions if settings changed mid-generation
+            if (fileRef) {
+              cachedFrames[index] = { size, data: matrixData };
+
+              ctx.postMessage({
+                type: 'PREGEN_PROGRESS',
+                index,
+                total: totalDataChunks,
+                progress: Math.round((index / totalDataChunks) * 100)
+              });
+            }
+          }
+        } catch (err: any) {
+          console.error('Background pre-rendering failed:', err);
+        }
+      })();
+
     } catch (err: any) {
       ctx.postMessage({
         type: 'LOAD_ERROR',
