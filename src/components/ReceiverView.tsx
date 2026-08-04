@@ -17,8 +17,15 @@ import {
 export default function ReceiverView() {
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
-  const [isScanning, setIsScanning] = useState<boolean>(false);
+  const [isScanning, setIsScanning] = useState<boolean>(true);
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
+  const [qrLocation, setQrLocation] = useState<{
+    topLeft: { x: number; y: number };
+    topRight: { x: number; y: number };
+    bottomRight: { x: number; y: number };
+    bottomLeft: { x: number; y: number };
+  } | null>(null);
+  const qrLocationTimeoutRef = useRef<any>(null);
   
   // Storage for chunks: key is chunk index, value is the base64 payload
   const [capturedChunks, setCapturedChunks] = useState<Record<number, string>>({});
@@ -105,11 +112,64 @@ export default function ReceiverView() {
     scanWorkerRef.current = worker;
 
     worker.onmessage = (e) => {
-      const { type, result, error } = e.data;
+      const { type, result, location, width, height, error } = e.data;
       isDecodingRef.current = false;
 
-      if (type === 'SCAN_RESULT' && result) {
-        handleScannedCode(result);
+      if (type === 'SCAN_RESULT') {
+        if (result) {
+          handleScannedCode(result);
+        }
+
+        if (location && videoRef.current) {
+          const video = videoRef.current;
+          const containerWidth = video.clientWidth;
+          const containerHeight = video.clientHeight;
+          const videoWidth = video.videoWidth;
+          const videoHeight = video.videoHeight;
+
+          if (containerWidth && containerHeight && videoWidth && videoHeight) {
+            const videoRatio = videoWidth / videoHeight;
+            const containerRatio = containerWidth / containerHeight;
+
+            let renderedWidth = containerWidth;
+            let renderedHeight = containerHeight;
+            let xOffset = 0;
+            let yOffset = 0;
+
+            if (containerRatio > videoRatio) {
+              renderedHeight = containerHeight;
+              renderedWidth = containerHeight * videoRatio;
+              xOffset = (containerWidth - renderedWidth) / 2;
+            } else {
+              renderedWidth = containerWidth;
+              renderedHeight = containerWidth / videoRatio;
+              yOffset = (containerHeight - renderedHeight) / 2;
+            }
+
+            const transformPoint = (p: { x: number; y: number }) => {
+              const normX = p.x / width;
+              const normY = p.y / height;
+              return {
+                x: xOffset + normX * renderedWidth,
+                y: yOffset + normY * renderedHeight,
+              };
+            };
+
+            setQrLocation({
+              topLeft: transformPoint(location.topLeftCorner),
+              topRight: transformPoint(location.topRightCorner),
+              bottomRight: transformPoint(location.bottomRightCorner),
+              bottomLeft: transformPoint(location.bottomLeftCorner),
+            });
+
+            if (qrLocationTimeoutRef.current) {
+              clearTimeout(qrLocationTimeoutRef.current);
+            }
+            qrLocationTimeoutRef.current = setTimeout(() => {
+              setQrLocation(null);
+            }, 180);
+          }
+        }
       } else if (type === 'SCAN_ERROR') {
         console.error('QR reader worker error:', error);
       }
@@ -117,6 +177,9 @@ export default function ReceiverView() {
 
     return () => {
       worker.terminate();
+      if (qrLocationTimeoutRef.current) {
+        clearTimeout(qrLocationTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -703,6 +766,57 @@ export default function ReceiverView() {
                     </>
                   )}
                 </div>
+              )}
+
+              {/* Target Tracker Selection Feedback Overlay */}
+              {isScanning && qrLocation && (
+                <svg className="absolute inset-0 w-full h-full pointer-events-none z-30">
+                  {/* Glowing semi-transparent polygon over the QR code */}
+                  <polygon
+                    points={`${qrLocation.topLeft.x},${qrLocation.topLeft.y} ${qrLocation.topRight.x},${qrLocation.topRight.y} ${qrLocation.bottomRight.x},${qrLocation.bottomRight.y} ${qrLocation.bottomLeft.x},${qrLocation.bottomLeft.y}`}
+                    fill="rgba(99, 102, 241, 0.18)"
+                    stroke="#4f46e5"
+                    strokeWidth="3.5"
+                    strokeLinejoin="round"
+                    className="animate-pulse shadow-lg"
+                  />
+
+                  {/* Tracking dot elements on the corners */}
+                  <circle cx={qrLocation.topLeft.x} cy={qrLocation.topLeft.y} r="6" fill="#4f46e5" className="animate-ping" />
+                  <circle cx={qrLocation.topLeft.x} cy={qrLocation.topLeft.y} r="3" fill="#6366f1" />
+
+                  <circle cx={qrLocation.topRight.x} cy={qrLocation.topRight.y} r="6" fill="#4f46e5" className="animate-ping" />
+                  <circle cx={qrLocation.topRight.x} cy={qrLocation.topRight.y} r="3" fill="#6366f1" />
+
+                  <circle cx={qrLocation.bottomRight.x} cy={qrLocation.bottomRight.y} r="6" fill="#4f46e5" className="animate-ping" />
+                  <circle cx={qrLocation.bottomRight.x} cy={qrLocation.bottomRight.y} r="3" fill="#6366f1" />
+
+                  <circle cx={qrLocation.bottomLeft.x} cy={qrLocation.bottomLeft.y} r="6" fill="#4f46e5" className="animate-ping" />
+                  <circle cx={qrLocation.bottomLeft.x} cy={qrLocation.bottomLeft.y} r="3" fill="#6366f1" />
+
+                  {/* "SECURE MATCH" status tooltip attached to the top edge of the selection bounding box */}
+                  <g transform={`translate(${(qrLocation.topLeft.x + qrLocation.topRight.x) / 2}, ${Math.min(qrLocation.topLeft.y, qrLocation.topRight.y) - 14})`}>
+                    <rect
+                      x="-55"
+                      y="-12"
+                      width="110"
+                      height="18"
+                      rx="4"
+                      fill="#4f46e5"
+                      className="opacity-95"
+                    />
+                    <text
+                      textAnchor="middle"
+                      fill="#ffffff"
+                      fontSize="9px"
+                      fontWeight="bold"
+                      fontFamily="monospace"
+                      dominantBaseline="middle"
+                    >
+                      SECURE MATCH
+                    </text>
+                  </g>
+                </svg>
               )}
 
               {/* Glowing overlay lines */}

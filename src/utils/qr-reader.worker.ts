@@ -19,6 +19,9 @@ ctx.addEventListener('message', (e: MessageEvent) => {
     ctx.postMessage({
       type: 'SCAN_RESULT',
       result: code ? code.data : null,
+      location: code ? code.location : null,
+      width,
+      height,
     });
   } catch (err: any) {
     ctx.postMessage({
