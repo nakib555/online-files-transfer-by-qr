@@ -13,9 +13,9 @@ interface HeaderProps {
 
 export default function Header({ onBackToHome, showBack = false }: HeaderProps) {
   return (
-    <header className="border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-50 px-6 py-4">
-      <div className="max-w-7xl mx-auto flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <header className="border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-50 px-4 sm:px-6 py-3 sm:py-4">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <div className="relative">
             <div className="absolute inset-0 bg-indigo-500/10 rounded filter blur-sm"></div>
             <div className="relative border border-indigo-200 p-2 bg-slate-50 rounded">

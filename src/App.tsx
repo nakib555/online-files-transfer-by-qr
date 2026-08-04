@@ -41,7 +41,7 @@ export default function App() {
       </main>
 
       {/* Industrial status bar footer */}
-      <footer className="border-t border-slate-200 bg-white/40 py-4 px-6 font-mono text-[10px] text-slate-500">
+      <footer className="border-t border-slate-200 bg-white/40 py-4 px-4 sm:px-6 font-mono text-[10px] text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping"></span>

@@ -141,13 +141,23 @@ export default function ReceiverView() {
     stopCamera();
     setCameraError('');
     try {
-      const constraints: MediaStreamConstraints = {
-        video: selectedCameraId 
-          ? { deviceId: { exact: selectedCameraId }, width: { ideal: 1920 }, height: { ideal: 1080 } } 
-          : { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
-      };
-      
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      let stream;
+      try {
+        const constraintsWithAdvanced: MediaStreamConstraints = {
+          video: selectedCameraId 
+            ? { deviceId: { exact: selectedCameraId }, width: { ideal: 4096 }, height: { ideal: 2160 }, advanced: [{ focusMode: 'continuous' } as any] } 
+            : { facingMode: 'environment', width: { ideal: 4096 }, height: { ideal: 2160 }, advanced: [{ focusMode: 'continuous' } as any] }
+        };
+        stream = await navigator.mediaDevices.getUserMedia(constraintsWithAdvanced);
+      } catch (err) {
+        // Fallback without advanced constraints for Safari/iOS
+        const fallbackConstraints: MediaStreamConstraints = {
+          video: selectedCameraId 
+            ? { deviceId: { exact: selectedCameraId }, width: { ideal: 4096 }, height: { ideal: 2160 } } 
+            : { facingMode: 'environment', width: { ideal: 4096 }, height: { ideal: 2160 } }
+        };
+        stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+      }
       streamRef.current = stream;
       
       if (videoRef.current) {
@@ -411,7 +421,7 @@ export default function ReceiverView() {
   const renderChunksGrid = () => {
     if (!metadata) {
       return (
-        <div className="flex flex-col items-center justify-center p-8 border border-slate-200 bg-white/20 rounded-xl">
+        <div className="flex flex-col items-center justify-center p-4 sm:p-8 border border-slate-200 bg-white/20 rounded-xl">
           <Activity className="w-8 h-8 text-slate-400 animate-pulse mb-3" />
           <p className="text-slate-500 text-xs">Awaiting metadata chunk (Index 0) to compute stream geometry...</p>
         </div>
@@ -465,10 +475,10 @@ export default function ReceiverView() {
 
   return (
     <div className="max-w-4xl mx-auto py-6 px-4 animate-fade-in font-mono">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
         {/* Left Column: Viewfinder camera feed */}
         <div className="lg:col-span-6 flex flex-col gap-4">
-          <div className="w-full border border-slate-200 bg-white rounded-2xl p-5 relative overflow-hidden flex flex-col items-center">
+          <div className="w-full border border-slate-200 bg-white rounded-2xl p-4 sm:p-5 relative overflow-hidden flex flex-col items-center">
             {/* Viewfinder Target Reticle */}
             <div className="absolute top-10 left-10 w-8 h-8 border-t-2 border-l-2 border-indigo-600 z-10 animate-pulse"></div>
             <div className="absolute top-10 right-10 w-8 h-8 border-t-2 border-r-2 border-indigo-600 z-10 animate-pulse"></div>
@@ -479,11 +489,11 @@ export default function ReceiverView() {
             <canvas ref={canvasRef} className="hidden" />
 
             {/* Video Feed */}
-            <div className="relative w-full aspect-video sm:aspect-square bg-slate-50 border border-slate-200 rounded-xl overflow-hidden flex items-center justify-center">
+            <div className="relative w-full aspect-square sm:aspect-video md:aspect-square bg-slate-50 border border-slate-200 rounded-xl overflow-hidden flex items-center justify-center">
               {isScanning ? (
                 <video
                   ref={videoRef}
-                  className="w-full h-full object-cover rounded-xl"
+                  className="w-full h-full object-contain rounded-xl"
                   muted
                   playsInline
                 />
@@ -560,7 +570,7 @@ export default function ReceiverView() {
             </div>
 
             {/* Live Stats Diagnostics */}
-            <div className="w-full border border-slate-200 bg-white p-5 rounded-xl space-y-3">
+            <div className="w-full border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Activity className="w-4 h-4 text-indigo-500" />
@@ -583,7 +593,7 @@ export default function ReceiverView() {
         {/* Right Column: Real-time Stats & Chunk Map */}
         <div className="lg:col-span-6 space-y-4">
           {/* Metadata Card */}
-          <div className="border border-slate-200 bg-white p-5 rounded-xl space-y-4">
+          <div className="border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-slate-200">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Optical Payload Profile</h3>
               <div className="flex items-center gap-2">
@@ -647,7 +657,7 @@ export default function ReceiverView() {
 
           {/* Saved Sessions Backlog */}
           {!metadata && savedSessions.length > 0 && (
-            <div className="border border-slate-200 bg-white p-5 rounded-xl space-y-3">
+            <div className="border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-3">
               <div className="flex justify-between items-center pb-1 border-b border-slate-200">
                 <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Incomplete Transfers / Backlogs</span>
                 <span className="text-[9px] text-amber-500 font-extrabold animate-pulse">RESUMABLE</span>
@@ -696,12 +706,12 @@ export default function ReceiverView() {
           )}
 
           {/* Assembly grid */}
-          <div className="border border-slate-200 bg-white p-5 rounded-xl">
+          <div className="border border-slate-200 bg-white p-4 sm:p-5 rounded-xl">
             {renderChunksGrid()}
           </div>
 
           {/* Real-time Logger Terminal */}
-          <div className="border border-slate-200 bg-white p-5 rounded-xl space-y-3">
+          <div className="border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-3">
             <div className="flex justify-between items-center pb-1 border-b border-slate-200">
               <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Security Sandbox Activity Logs</span>
               <span className="text-[9px] text-slate-400">LIVESTREAM DATA</span>

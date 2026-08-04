@@ -130,7 +130,7 @@ export default function SenderView() {
         textToEncode,
         {
           errorCorrectionLevel: ecLevel,
-          width: 380,
+          width: 1024,
           margin: 1,
           color: {
             dark: '#000000',
@@ -257,7 +257,7 @@ export default function SenderView() {
   return (
     <div className="max-w-4xl mx-auto py-6 px-4 animate-fade-in font-mono">
       {isProcessing ? (
-        <div className="max-w-md mx-auto border border-slate-200 bg-white p-8 rounded-2xl flex flex-col items-center justify-center space-y-6 text-center shadow-xl">
+        <div className="max-w-md mx-auto border border-slate-200 bg-white p-3 sm:p-4 sm:p-8 rounded-2xl flex flex-col items-center justify-center space-y-6 text-center shadow-xl">
           <RefreshCw className="w-12 h-12 text-indigo-500 animate-spin" />
           <div className="space-y-2 w-full">
             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">{processingStatus}</h3>
@@ -311,7 +311,7 @@ export default function SenderView() {
           </div>
 
           {/* Quick Security Tip Box */}
-          <div className="border border-slate-200/80 bg-white/40 p-4 rounded-xl flex gap-3">
+          <div className="border border-slate-200/80 bg-white/40 p-3 sm:p-4 rounded-xl flex gap-3">
             <AlertCircle className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
             <div>
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Optical Transfer Physics</h4>
@@ -322,10 +322,10 @@ export default function SenderView() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:p-4 sm:gap-3 sm:p-4 sm:p-6 items-start">
           {/* Left Column: QR Code Display Container */}
-          <div className="lg:col-span-6 flex flex-col items-center gap-4">
-            <div className="w-full border border-slate-200 bg-white p-6 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden">
+          <div className="lg:col-span-6 flex flex-col items-center gap-3 sm:p-4">
+            <div className="w-full border border-slate-200 bg-white p-3 sm:p-4 sm:p-6 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden">
               {/* Corner Indicators */}
               <div className="absolute top-3 left-3 w-4 h-4 border-t-2 border-l-2 border-indigo-600/40"></div>
               <div className="absolute top-3 right-3 w-4 h-4 border-t-2 border-r-2 border-indigo-600/40"></div>
@@ -342,13 +342,13 @@ export default function SenderView() {
                 <canvas
                   id="qr-transmitter-canvas"
                   ref={canvasRef}
-                  className="w-full max-w-[280px] sm:max-w-[340px] aspect-square block"
+                  className="w-full h-auto max-w-[320px] sm:max-w-[400px] md:max-w-[500px] aspect-square block"
                   style={{ imageRendering: 'pixelated' }}
                 />
               </div>
 
               {/* Active frame label */}
-              <div className="mt-4 flex items-center gap-4 text-xs font-semibold">
+              <div className="mt-4 flex items-center gap-3 sm:p-4 text-xs font-semibold">
                 <span className="text-slate-500 bg-slate-50 border border-slate-200 px-2 py-1 rounded">
                   FRAME: <span className="text-slate-900">{currentIndex}</span> / {totalChunksCount}
                 </span>
@@ -363,7 +363,7 @@ export default function SenderView() {
             </div>
 
             {/* Live Stats Diagnostics */}
-            <div className="w-full border border-slate-200 bg-white p-5 rounded-xl space-y-3">
+            <div className="w-full border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Zap className="w-4 h-4 text-indigo-500" />
@@ -406,7 +406,7 @@ export default function SenderView() {
             </div>
 
             {/* Playback Controls Panel */}
-            <div className="w-full border border-slate-200 bg-white p-4 rounded-xl flex items-center justify-between">
+            <div className="w-full border border-slate-200 bg-white p-3 sm:p-4 rounded-xl flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={stepPrev}
@@ -467,7 +467,7 @@ export default function SenderView() {
           {/* Right Column: File Details & Transmission Tuning Panel */}
           <div className="lg:col-span-6 space-y-4">
             {/* File Info Card */}
-            <div className="border border-slate-200 bg-white p-5 rounded-xl space-y-4">
+            <div className="border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-4">
               <div className="flex items-start gap-3">
                 <div className="p-2.5 bg-slate-50 border border-slate-200 rounded text-indigo-500">
                   <FileText className="w-5 h-5" />
@@ -507,7 +507,7 @@ export default function SenderView() {
             </div>
 
             {/* Transmission Presets Configuration */}
-            <div className="border border-slate-200 bg-white p-5 rounded-xl space-y-4">
+            <div className="border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-4">
               <div className="flex items-center gap-2">
                 <Sliders className="w-4 h-4 text-indigo-500" />
                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Optical Presets</h4>
@@ -516,9 +516,9 @@ export default function SenderView() {
               <div className="grid grid-cols-5 gap-1.5">
                 <button
                   type="button"
-                  onClick={() => handlePreset(240, 1800)}
+                  onClick={() => handlePreset(240, 4096)}
                   className={`p-2 rounded border text-left cursor-pointer transition-all ${
-                    fps === 240 && chunkSize === 1800
+                    fps === 240 && chunkSize === 4096
                       ? 'bg-indigo-600/10 border-indigo-600 text-indigo-500'
                       : 'bg-slate-50/40 border-slate-200 hover:border-slate-300 text-slate-500'
                   }`}
@@ -526,7 +526,7 @@ export default function SenderView() {
                 >
                   <span className="text-[9px] font-extrabold block">SUPREME</span>
                   <span className="text-[8px] text-slate-500 block">240 FPS</span>
-                  <span className="text-[8px] text-slate-500 block">1.8K Ch</span>
+                  <span className="text-[8px] text-slate-500 block">4K Ch</span>
                 </button>
                 <button
                   type="button"
@@ -619,7 +619,7 @@ export default function SenderView() {
                   <input
                     type="range"
                     min="50"
-                    max="2800"
+                    max="4096"
                     step="10"
                     value={chunkSize}
                     onChange={(e) => {
@@ -629,7 +629,7 @@ export default function SenderView() {
                   />
                   <div className="flex justify-between text-[9px] text-slate-400">
                     <span>50 CH (EASY SCAN)</span>
-                    <span>2800 CH (COMPACT GIGA-LINK)</span>
+                    <span>4096 CH (COMPACT GIGA-LINK)</span>
                   </div>
                 </div>
               </div>

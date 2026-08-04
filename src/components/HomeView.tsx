@@ -12,7 +12,7 @@ interface HomeViewProps {
 
 export default function HomeView({ onSelectMode }: HomeViewProps) {
   return (
-    <div className="max-w-4xl mx-auto py-12 px-6 animate-fade-in font-mono">
+    <div className="max-w-4xl mx-auto py-6 sm:py-12 px-4 sm:px-6 animate-fade-in font-mono">
       {/* Title block */}
       <div className="text-center max-w-2xl mx-auto mb-12 space-y-3">
         <h2 className="text-2xl font-bold text-slate-900 tracking-wider">SECURE OPTICAL AIR-GAP</h2>
@@ -30,7 +30,7 @@ export default function HomeView({ onSelectMode }: HomeViewProps) {
         {/* Send File Card */}
         <div 
           onClick={() => onSelectMode('send')}
-          className="group border border-slate-200 bg-white hover:border-indigo-400 p-8 rounded-2xl flex flex-col justify-between transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md"
+          className="group border border-slate-200 bg-white hover:border-indigo-400 p-5 sm:p-8 rounded-2xl flex flex-col justify-between transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md"
         >
           <div className="space-y-4">
             <div className="w-12 h-12 border border-slate-100 bg-slate-50 flex items-center justify-center rounded-lg text-indigo-600 group-hover:bg-indigo-50 group-hover:border-indigo-200 transition-colors">
@@ -53,7 +53,7 @@ export default function HomeView({ onSelectMode }: HomeViewProps) {
         {/* Receive File Card */}
         <div 
           onClick={() => onSelectMode('receive')}
-          className="group border border-slate-200 bg-white hover:border-indigo-400 p-8 rounded-2xl flex flex-col justify-between transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md"
+          className="group border border-slate-200 bg-white hover:border-indigo-400 p-5 sm:p-8 rounded-2xl flex flex-col justify-between transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md"
         >
           <div className="space-y-4">
             <div className="w-12 h-12 border border-slate-100 bg-slate-50 flex items-center justify-center rounded-lg text-indigo-600 group-hover:bg-indigo-50 group-hover:border-indigo-200 transition-colors">
@@ -80,7 +80,7 @@ export default function HomeView({ onSelectMode }: HomeViewProps) {
           <Shield className="w-4 h-4 text-indigo-500" />
           Optical Air-Gap Sequence Flow
         </h4>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-2 font-mono text-xs text-slate-500">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-2 font-mono text-xs text-slate-500">
           <div className="space-y-1">
             <span className="text-indigo-600 font-extrabold block">01. INGESTION</span>
             <p className="text-[11px] leading-relaxed">Convert local files safely into binary array strings inside the local environment.</p>
