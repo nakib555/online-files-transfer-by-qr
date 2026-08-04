@@ -8,7 +8,6 @@ import {
   Camera, CheckCircle2, AlertTriangle, RefreshCw, 
   Activity, Video, Download, Play, Pause, ListFilter
 } from 'lucide-react';
-import jsQR from 'jsqr';
 import { FileMetadata, ReceiverLog, SavedSession } from '../types';
 import { 
   parseChunk, parseMetadata, formatBytes, CRC32,
@@ -82,6 +81,44 @@ export default function ReceiverView() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const requestRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const lastScanTimeRef = useRef<number>(0);
+  const scanWorkerRef = useRef<Worker | null>(null);
+  const isDecodingRef = useRef<boolean>(false);
+  const metadataRef = useRef<FileMetadata | null>(null);
+  const isHapticEnabledRef = useRef<boolean>(true);
+
+  // Synchronize state values to refs to avoid event listener closures issues
+  useEffect(() => {
+    metadataRef.current = metadata;
+  }, [metadata]);
+
+  useEffect(() => {
+    isHapticEnabledRef.current = isHapticEnabled;
+  }, [isHapticEnabled]);
+
+  // Initialize background QR reader Web Worker on mount
+  useEffect(() => {
+    const worker = new Worker(
+      new URL('../utils/qr-reader.worker.ts', import.meta.url),
+      { type: 'module' }
+    );
+    scanWorkerRef.current = worker;
+
+    worker.onmessage = (e) => {
+      const { type, result, error } = e.data;
+      isDecodingRef.current = false;
+
+      if (type === 'SCAN_RESULT' && result) {
+        handleScannedCode(result);
+      } else if (type === 'SCAN_ERROR') {
+        console.error('QR reader worker error:', error);
+      }
+    };
+
+    return () => {
+      worker.terminate();
+    };
+  }, []);
 
   const forceRequestPermission = async () => {
     setCameraError('');
@@ -190,13 +227,18 @@ export default function ReceiverView() {
     try {
       let stream: MediaStream;
 
+      // Use safe, highly compatible, and performant HD constraints (1280x720 ideal)
+      const standardResolution = {
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 720, max: 1080 }
+      };
+
       if (selectedCameraId) {
         try {
           addLog('info', 'Attempting connection to selected camera ID.');
           stream = await attemptStream({
             deviceId: { exact: selectedCameraId },
-            width: { ideal: 4096 },
-            height: { ideal: 2160 }
+            ...standardResolution
           });
         } catch (err) {
           addLog('warning', 'Selected camera unavailable. Falling back to default rear camera.');
@@ -204,16 +246,14 @@ export default function ReceiverView() {
           try {
             stream = await attemptStream({
               facingMode: 'environment',
-              width: { ideal: 4096 },
-              height: { ideal: 2160 }
+              ...standardResolution
             });
           } catch (err2) {
             addLog('warning', 'Rear camera unavailable. Falling back to front-facing camera.');
             try {
               stream = await attemptStream({
                 facingMode: 'user',
-                width: { ideal: 4096 },
-                height: { ideal: 2160 }
+                ...standardResolution
               });
             } catch (err3) {
               addLog('warning', 'Specific camera modes failed. Requesting any available video source.');
@@ -227,16 +267,14 @@ export default function ReceiverView() {
           addLog('info', 'Requesting rear-facing camera (environment)...');
           stream = await attemptStream({
             facingMode: 'environment',
-            width: { ideal: 4096 },
-            height: { ideal: 2160 }
+            ...standardResolution
           });
         } catch (err) {
           addLog('warning', 'Rear camera unavailable or failed. Trying front-facing camera (user)...');
           try {
             stream = await attemptStream({
               facingMode: 'user',
-              width: { ideal: 4096 },
-              height: { ideal: 2160 }
+              ...standardResolution
             });
           } catch (err2) {
             addLog('warning', 'Specific camera modes failed. Requesting any available video source.');
@@ -250,7 +288,9 @@ export default function ReceiverView() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute('playsinline', 'true'); // Required for iOS
-        videoRef.current.play();
+        videoRef.current.play().catch(playErr => {
+          console.warn('Autoplay blocked or play failed:', playErr);
+        });
         addLog('info', `Camera link established. Scan loop starting.`);
       }
 
@@ -284,27 +324,64 @@ export default function ReceiverView() {
       return;
     }
 
+    const now = Date.now();
+    // Throttle: limit scanning to at most once every 80ms (approx 12 FPS)
+    if (now - lastScanTimeRef.current < 80) {
+      requestRef.current = requestAnimationFrame(scanFrame);
+      return;
+    }
+
+    // Skip frame if worker is currently decoding another frame to avoid backlog queues
+    if (isDecodingRef.current || !scanWorkerRef.current) {
+      requestRef.current = requestAnimationFrame(scanFrame);
+      return;
+    }
+
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
     if (video.readyState === video.HAVE_ENOUGH_DATA && ctx) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      
-      // Draw video frame onto offscreen canvas
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      // Get frame pixels
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      
-      // Scan via jsQR
-      const code = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: 'attemptBoth',
-      });
+      lastScanTimeRef.current = now;
 
-      if (code && code.data) {
-        handleScannedCode(code.data);
+      let targetWidth = video.videoWidth;
+      let targetHeight = video.videoHeight;
+
+      // Scale down image to 480px max dimension for extremely fast decoding
+      const maxDimension = 480;
+      if (targetWidth > maxDimension || targetHeight > maxDimension) {
+        if (targetWidth > targetHeight) {
+          targetHeight = Math.round((targetHeight * maxDimension) / targetWidth);
+          targetWidth = maxDimension;
+        } else {
+          targetWidth = Math.round((targetWidth * maxDimension) / targetHeight);
+          targetHeight = maxDimension;
+        }
+      }
+
+      // Avoid redundant canvas reallocation/resizing which triggers garbage collection and pipeline flushes
+      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+      }
+
+      // Draw the video frame downscaled
+      ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+
+      try {
+        // Extract the pixel data
+        const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+
+        // Run background QR decoding using transferable zero-copy buffer transfer
+        isDecodingRef.current = true;
+        scanWorkerRef.current.postMessage({
+          data: imageData.data,
+          width: targetWidth,
+          height: targetHeight
+        }, [imageData.data.buffer]);
+      } catch (err) {
+        console.error('Error postMessage to scanner worker:', err);
+        isDecodingRef.current = false;
       }
     }
 
@@ -334,7 +411,7 @@ export default function ReceiverView() {
       }
 
       // Trigger tactile haptic feedback click if enabled and supported by the device browser
-      if (isHapticEnabled && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      if (isHapticEnabledRef.current && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
         navigator.vibrate(60);
       }
 
@@ -345,9 +422,10 @@ export default function ReceiverView() {
       const chunkBytes = Math.floor(payload.length * 3 / 4);
       bytesReceivedRef.current.push({ time: now, bytes: chunkBytes });
 
-      if (metadata) {
+      const currentMetadata = metadataRef.current;
+      if (currentMetadata) {
         // We already have file metadata, write payload to IndexedDB immediately and keep state clean
-        const sessionId = `optgap:${metadata.name}:${metadata.size}:${metadata.crc32}`;
+        const sessionId = `optgap:${currentMetadata.name}:${currentMetadata.size}:${currentMetadata.crc32}`;
         saveChunkToDB(sessionId, index, payload).catch(err => {
           console.error('IndexedDB write failed:', err);
         });
@@ -592,15 +670,15 @@ export default function ReceiverView() {
               <div className="absolute bottom-4 left-4 w-6 h-6 border-b-2 border-l-2 border-indigo-600 z-10 animate-pulse"></div>
               <div className="absolute bottom-4 right-4 w-6 h-6 border-b-2 border-r-2 border-indigo-600 z-10 animate-pulse"></div>
 
-              {isScanning ? (
-                <video
-                  ref={videoRef}
-                  className="w-full h-full object-contain rounded-xl"
-                  muted
-                  playsInline
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center text-center p-4">
+              <video
+                ref={videoRef}
+                className={`w-full h-full object-contain rounded-xl ${isScanning ? '' : 'hidden'}`}
+                muted
+                playsInline
+              />
+
+              {!isScanning && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-slate-50">
                   <Camera className="w-12 h-12 text-indigo-500/80 mb-3 animate-pulse" />
                   {cameras.length === 0 ? (
                     <>

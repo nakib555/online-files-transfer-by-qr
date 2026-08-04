@@ -8,9 +8,8 @@ import {
   Upload, Play, Pause, SkipForward, SkipBack, RefreshCw, 
   FileText, Sliders, Settings, Check, Zap, AlertCircle
 } from 'lucide-react';
-import QRCode from 'qrcode';
 import { FileMetadata } from '../types';
-import { blobToBase64, formatChunk, formatBytes, computeCrc32, CRC32 } from '../utils/fileHelper';
+import { formatBytes } from '../utils/fileHelper';
 
 export default function SenderView() {
   const [file, setFile] = useState<File | null>(null);
@@ -31,19 +30,107 @@ export default function SenderView() {
   const startTimeRef = useRef<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
 
+  const workerRef = useRef<Worker | null>(null);
+  const currentIndexRef = useRef<number>(0);
+
+  // Sync currentIndex ref for the Worker event listener closure
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
   // Convert character payload size to byte chunk size as a multiple of 3
   const getByteChunkSize = (charsSize: number) => {
     const bytes = Math.floor((charsSize * 3) / 4);
     return Math.max(3, Math.floor(bytes / 3) * 3);
   };
 
-  // Re-calculate total chunks count and reset when file or chunkSize changes
+  // Helper to draw raw QR code BitMatrix modules onto canvas
+  const drawQRFrame = (index: number, size: number, data: Uint8Array) => {
+    if (!canvasRef.current || index !== currentIndexRef.current) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const canvasSize = 1024;
+    canvas.width = canvasSize;
+    canvas.height = canvasSize;
+
+    ctx.clearRect(0, 0, canvasSize, canvasSize);
+
+    // Grid layout calculations
+    const cellSize = Math.floor(canvasSize / size);
+    const padding = (canvasSize - cellSize * size) / 2;
+
+    // Background white
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasSize, canvasSize);
+
+    // Draw dark modules
+    ctx.fillStyle = '#000000';
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (data[r * size + c] === 1) {
+          ctx.fillRect(
+            padding + c * cellSize,
+            padding + r * cellSize,
+            cellSize,
+            cellSize
+          );
+        }
+      }
+    }
+    setQrError('');
+  };
+
+  // Initialize and manage the Web Worker life cycle
   useEffect(() => {
-    if (!file) return;
-    const byteChunkSize = getByteChunkSize(chunkSize);
-    const totalDataChunks = Math.ceil(file.size / byteChunkSize);
-    setTotalChunksCount(totalDataChunks);
+    const worker = new Worker(
+      new URL('../utils/qr.worker.ts', import.meta.url),
+      { type: 'module' }
+    );
+    workerRef.current = worker;
+
+    worker.onmessage = (e) => {
+      const { type, ...payload } = e.data;
+
+      if (type === 'LOAD_PROGRESS') {
+        setProcessingProgress(payload.progress);
+        setProcessingStatus(payload.status);
+      } else if (type === 'LOAD_COMPLETE') {
+        setTotalChunksCount(payload.totalChunksCount);
+        setComputedCrc32(payload.crc32);
+        setIsProcessing(false);
+      } else if (type === 'LOAD_ERROR') {
+        console.error('Worker file load error:', payload.error);
+        setIsProcessing(false);
+        alert(`Worker failed to process file: ${payload.error}`);
+      } else if (type === 'FRAME_READY') {
+        drawQRFrame(payload.index, payload.size, payload.data);
+      } else if (type === 'FRAME_ERROR') {
+        console.error(`Worker frame error at index ${payload.index}:`, payload.error);
+        setQrError(payload.error || 'QR generation failed');
+      }
+    };
+
+    return () => {
+      worker.terminate();
+    };
+  }, []);
+
+  // Re-calculate chunks and offload CRC32 hashing & slicing to the Web Worker
+  useEffect(() => {
+    if (!file || !workerRef.current) return;
+
+    setIsProcessing(true);
+    setProcessingProgress(0);
+    setProcessingStatus('Re-chunking stream sequence...');
     handleReset();
+
+    workerRef.current.postMessage({
+      type: 'LOAD_FILE',
+      data: { file, chunkSize }
+    });
   }, [chunkSize, file]);
 
   // Handle active transmission interval using high-performance requestAnimationFrame
@@ -85,125 +172,24 @@ export default function SenderView() {
     };
   }, [isPlaying, fps, totalChunksCount, isProcessing]);
 
-  // Render QR Code onto canvas when index or other parameters change
+  // Render QR Code onto canvas via the Web Worker when index changes
   useEffect(() => {
-    if (!file || totalChunksCount === 0 || !canvasRef.current || isProcessing) return;
+    if (!file || totalChunksCount === 0 || isProcessing || !workerRef.current) return;
 
-    let isCancelled = false;
-
-    const renderFrame = async () => {
-      let rawChunk = '';
-      if (currentIndex === 0) {
-        // Metadata chunk
-        const meta: FileMetadata = {
-          name: file.name,
-          size: file.size,
-          type: file.type || 'application/octet-stream',
-          chunkCount: totalChunksCount,
-          crc32: computedCrc32,
-        };
-        rawChunk = JSON.stringify(meta);
-      } else {
-        // Data chunk
-        const byteChunkSize = getByteChunkSize(chunkSize);
-        const start = (currentIndex - 1) * byteChunkSize;
-        const end = Math.min(file.size, start + byteChunkSize);
-        const blobSlice = file.slice(start, end);
-        rawChunk = await blobToBase64(blobSlice);
+    workerRef.current.postMessage({
+      type: 'GENERATE_FRAME',
+      data: {
+        index: currentIndex,
+        chunkSize,
+        totalChunksCount,
+        computedCrc32
       }
-
-      if (isCancelled) return;
-
-      // Format: currentIndex/totalChunksCount|payload
-      const textToEncode = formatChunk(currentIndex, totalChunksCount, rawChunk);
-
-      // Dynamically select the highest possible error correction level that fits this length to avoid "too big" error
-      const len = textToEncode.length;
-      let ecLevel: 'L' | 'M' | 'Q' | 'H' = 'H';
-      if (len > 1250) {
-        if (len <= 1630) ecLevel = 'Q';
-        else if (len <= 2290) ecLevel = 'M';
-        else ecLevel = 'L';
-      }
-
-      QRCode.toCanvas(
-        canvasRef.current,
-        textToEncode,
-        {
-          errorCorrectionLevel: ecLevel,
-          width: 1024,
-          margin: 1,
-          color: {
-            dark: '#000000',
-            light: '#ffffff',
-          },
-        },
-        (error) => {
-          if (error) {
-            console.error('Error rendering QR code:', error);
-            if (!isCancelled) {
-              setQrError(error.message || 'QR code too big');
-            }
-          } else {
-            if (!isCancelled) {
-              setQrError('');
-            }
-          }
-        }
-      );
-    };
-
-    renderFrame();
-
-    return () => {
-      isCancelled = true;
-    };
+    });
   }, [currentIndex, file, totalChunksCount, computedCrc32, chunkSize, isProcessing]);
 
   const handleFileChange = async (selectedFile: File) => {
-    try {
-      setFile(selectedFile);
-      setIsProcessing(true);
-      setProcessingProgress(0);
-      setProcessingStatus('Ingesting file and initializing stream...');
-      handleReset();
-
-      const byteChunkSize = getByteChunkSize(chunkSize);
-      const totalDataChunks = Math.ceil(selectedFile.size / byteChunkSize);
-      setTotalChunksCount(totalDataChunks);
-
-      // 1.5MB blocks (multiple of 3) to ensure full alignment
-      const calcChunkSize = 1.5 * 1024 * 1024;
-      const crcCalculator = new CRC32();
-      let offset = 0;
-      let blockIndex = 0;
-      const totalBlocks = Math.ceil(selectedFile.size / calcChunkSize);
-
-      while (offset < selectedFile.size) {
-        const sliceEnd = Math.min(selectedFile.size, offset + calcChunkSize);
-        const slice = selectedFile.slice(offset, sliceEnd);
-        const b64Part = await blobToBase64(slice);
-        crcCalculator.update(b64Part);
-        
-        offset = sliceEnd;
-        blockIndex++;
-        
-        setProcessingProgress(Math.round((blockIndex / totalBlocks) * 100));
-        setProcessingStatus(`Hashing file payload integrity: ${formatBytes(offset)} / ${formatBytes(selectedFile.size)}`);
-        
-        if (blockIndex % 5 === 0) {
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        }
-      }
-
-      const finalCrc = crcCalculator.getValue();
-      setComputedCrc32(finalCrc);
-      setIsProcessing(false);
-    } catch (err) {
-      console.error('File reading failed:', err);
-      setIsProcessing(false);
-      alert('Failed to read file. Please try another one.');
-    }
+    setFile(selectedFile);
+    handleReset();
   };
 
   const onDragOver = (e: DragEvent<HTMLDivElement>) => {
