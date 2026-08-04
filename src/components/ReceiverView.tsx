@@ -28,6 +28,14 @@ export default function ReceiverView() {
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>([]);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [transferSpeed, setTransferSpeed] = useState<number>(0);
+  const [isHapticEnabled, setIsHapticEnabled] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('optgap:haptic-enabled');
+      return stored !== 'false';
+    } catch {
+      return true;
+    }
+  });
   const bytesReceivedRef = useRef<{time: number, bytes: number}[]>([]);
 
   // Load saved sessions from localStorage on mount
@@ -163,24 +171,80 @@ export default function ReceiverView() {
   const startCamera = async () => {
     stopCamera();
     setCameraError('');
-    try {
-      let stream;
+    
+    // Define a helper to attempt to obtain a stream with specific video constraints
+    const attemptStream = async (videoConstraints: MediaTrackConstraints): Promise<MediaStream> => {
+      // First try with advanced focusMode constraint
       try {
-        const constraintsWithAdvanced: MediaStreamConstraints = {
-          video: selectedCameraId 
-            ? { deviceId: { exact: selectedCameraId }, width: { ideal: 4096 }, height: { ideal: 2160 }, advanced: [{ focusMode: 'continuous' } as any] } 
-            : { facingMode: 'environment', width: { ideal: 4096 }, height: { ideal: 2160 }, advanced: [{ focusMode: 'continuous' } as any] }
+        const withAdvanced = {
+          ...videoConstraints,
+          advanced: [{ focusMode: 'continuous' } as any]
         };
-        stream = await navigator.mediaDevices.getUserMedia(constraintsWithAdvanced);
-      } catch (err) {
-        // Fallback without advanced constraints for Safari/iOS
-        const fallbackConstraints: MediaStreamConstraints = {
-          video: selectedCameraId 
-            ? { deviceId: { exact: selectedCameraId }, width: { ideal: 4096 }, height: { ideal: 2160 } } 
-            : { facingMode: 'environment', width: { ideal: 4096 }, height: { ideal: 2160 } }
-        };
-        stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+        return await navigator.mediaDevices.getUserMedia({ video: withAdvanced });
+      } catch (e) {
+        // If advanced constraints fail, try without them
+        return await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
       }
+    };
+
+    try {
+      let stream: MediaStream;
+
+      if (selectedCameraId) {
+        try {
+          addLog('info', 'Attempting connection to selected camera ID.');
+          stream = await attemptStream({
+            deviceId: { exact: selectedCameraId },
+            width: { ideal: 4096 },
+            height: { ideal: 2160 }
+          });
+        } catch (err) {
+          addLog('warning', 'Selected camera unavailable. Falling back to default rear camera.');
+          // Fallback to environment
+          try {
+            stream = await attemptStream({
+              facingMode: 'environment',
+              width: { ideal: 4096 },
+              height: { ideal: 2160 }
+            });
+          } catch (err2) {
+            addLog('warning', 'Rear camera unavailable. Falling back to front-facing camera.');
+            try {
+              stream = await attemptStream({
+                facingMode: 'user',
+                width: { ideal: 4096 },
+                height: { ideal: 2160 }
+              });
+            } catch (err3) {
+              addLog('warning', 'Specific camera modes failed. Requesting any available video source.');
+              stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            }
+          }
+        }
+      } else {
+        // No pre-selected camera ID: attempt environment camera first
+        try {
+          addLog('info', 'Requesting rear-facing camera (environment)...');
+          stream = await attemptStream({
+            facingMode: 'environment',
+            width: { ideal: 4096 },
+            height: { ideal: 2160 }
+          });
+        } catch (err) {
+          addLog('warning', 'Rear camera unavailable or failed. Trying front-facing camera (user)...');
+          try {
+            stream = await attemptStream({
+              facingMode: 'user',
+              width: { ideal: 4096 },
+              height: { ideal: 2160 }
+            });
+          } catch (err2) {
+            addLog('warning', 'Specific camera modes failed. Requesting any available video source.');
+            stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          }
+        }
+      }
+
       streamRef.current = stream;
       
       if (videoRef.current) {
@@ -267,6 +331,11 @@ export default function ReceiverView() {
     setCapturedChunks((prev) => {
       if (prev[index] !== undefined) {
         return prev; // No changes, avoid trigger of effects
+      }
+
+      // Trigger tactile haptic feedback click if enabled and supported by the device browser
+      if (isHapticEnabled && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate(60);
       }
 
       const updated = { ...prev };
@@ -412,6 +481,11 @@ export default function ReceiverView() {
           const expectedCrc = metadata.crc32;
 
           if (computedCrc === expectedCrc) {
+            // Trigger beautiful multi-pulse success haptic pattern
+            if (isHapticEnabled && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+              navigator.vibrate([100, 50, 100, 50, 150]);
+            }
+
             addLog('success', `CRC32 verified successfully! [${computedCrc} === ${expectedCrc}]`);
             addLog('info', 'Reassembling segments and compiling binary file stream...');
             
@@ -422,6 +496,11 @@ export default function ReceiverView() {
             clearSession(sessionId);
             loadSavedSessions();
           } else {
+            // Trigger heavy alerting double buzz pattern for transfer/CRC mismatch failures
+            if (isHapticEnabled && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+              navigator.vibrate([300, 100, 300]);
+            }
+
             addLog('error', `CRC32 MISMATCH DETECTED! Expected: [${expectedCrc}] but computed: [${computedCrc}]. Integrity check failed.`);
           }
         } catch (err: any) {
@@ -581,6 +660,37 @@ export default function ReceiverView() {
                   title="Force Ask Camera Permissions"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Tactile Haptic Clicks toggle switch */}
+              <div className="flex items-center justify-between border-t border-slate-100 pt-2 px-0.5">
+                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${isHapticEnabled ? 'bg-indigo-600 animate-pulse' : 'bg-slate-300'}`}></span>
+                  Tactile Haptic Clicks
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextVal = !isHapticEnabled;
+                    setIsHapticEnabled(nextVal);
+                    try {
+                      localStorage.setItem('optgap:haptic-enabled', String(nextVal));
+                    } catch {}
+                    if (nextVal && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+                      navigator.vibrate([40]);
+                    }
+                  }}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    isHapticEnabled ? 'bg-indigo-600' : 'bg-slate-200'
+                  }`}
+                  title="Toggle Tactile Feedback"
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      isHapticEnabled ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
                 </button>
               </div>
 
