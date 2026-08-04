@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@keyframes scan {
+  0% {
+    top: 2%;
+  }
+  50% {
+    top: 98%;
+  }
+  100% {
+    top: 2%;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Custom scrollbar for light theme */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.5); /* slate-100 */
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(203, 213, 225, 0.8); /* slate-300 */
+  border-radius: 2px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.8); /* slate-400 */
+}
