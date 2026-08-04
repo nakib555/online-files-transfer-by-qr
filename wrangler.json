@@ -1,6 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "optical-airgap",
-  "pages_build_output_dir": "dist",
-  "compatibility_date": "2026-08-04"
+  "compatibility_date": "2026-08-04",
+  "assets": {
+    "directory": "./dist"
+  }
 }

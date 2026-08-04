@@ -489,7 +489,7 @@ export default function ReceiverView() {
             <canvas ref={canvasRef} className="hidden" />
 
             {/* Video Feed */}
-            <div className="relative w-full aspect-square sm:aspect-video md:aspect-square bg-slate-50 border border-slate-200 rounded-xl overflow-hidden flex items-center justify-center">
+            <div className="relative w-full aspect-[4/3] sm:aspect-video lg:aspect-[4/3] bg-slate-50 border border-slate-200 rounded-xl overflow-hidden flex items-center justify-center">
               {isScanning ? (
                 <video
                   ref={videoRef}

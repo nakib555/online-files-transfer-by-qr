@@ -322,7 +322,7 @@ export default function SenderView() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:p-4 sm:gap-3 sm:p-4 sm:p-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
           {/* Left Column: QR Code Display Container */}
           <div className="lg:col-span-6 flex flex-col items-center gap-3 sm:p-4">
             <div className="w-full border border-slate-200 bg-white p-3 sm:p-4 sm:p-6 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden">
@@ -333,18 +333,20 @@ export default function SenderView() {
               <div className="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-indigo-600/40"></div>
 
               {/* QR Canvas */}
-              <div className="bg-white p-3 rounded-lg shadow-2xl relative">
+              <div className="bg-white p-2 sm:p-3 w-full max-w-full sm:max-w-[400px] md:max-w-[500px] rounded-lg shadow-2xl relative flex justify-center items-center">
                 {totalChunksCount === 0 && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/80">
                     <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
                   </div>
                 )}
-                <canvas
-                  id="qr-transmitter-canvas"
-                  ref={canvasRef}
-                  className="w-full h-auto max-w-[320px] sm:max-w-[400px] md:max-w-[500px] aspect-square block"
-                  style={{ imageRendering: 'pixelated' }}
-                />
+                <div className="w-full aspect-square relative flex items-center justify-center">
+                  <canvas
+                    id="qr-transmitter-canvas"
+                    ref={canvasRef}
+                    className="w-full h-full object-contain mx-auto"
+                    style={{ imageRendering: 'pixelated', maxWidth: '100%', maxHeight: '100%' }}
+                  />
+                </div>
               </div>
 
               {/* Active frame label */}
@@ -497,10 +499,10 @@ export default function SenderView() {
                     {totalChunksCount > 0 ? Math.round((currentIndex / totalChunksCount) * 100) : 0}%
                   </span>
                 </div>
-                <div className="w-full bg-slate-50 h-2 rounded-full overflow-hidden border border-slate-200">
+                <div className="w-full bg-slate-50 h-2.5 rounded-full overflow-hidden border border-slate-200">
                   <div
-                    className="bg-indigo-600 h-full transition-all duration-100 shadow-[0_0_8px_rgba(16,185,129,0.3)]"
-                    style={{ width: `${totalChunksCount > 0 ? (currentIndex / totalChunksCount) * 100 : 0}%` }}
+                    className="h-full transition-all duration-300 bg-indigo-600"
+                    style={{ width: `${totalChunksCount > 0 ? Math.round((currentIndex / totalChunksCount) * 100) : 0}%` }}
                   ></div>
                 </div>
               </div>
