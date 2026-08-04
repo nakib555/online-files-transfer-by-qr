@@ -137,13 +137,15 @@ export default function ReceiverView() {
             let yOffset = 0;
 
             if (containerRatio > videoRatio) {
-              renderedHeight = containerHeight;
-              renderedWidth = containerHeight * videoRatio;
-              xOffset = (containerWidth - renderedWidth) / 2;
-            } else {
+              // Scaled to cover container width, top/bottom gets cropped
               renderedWidth = containerWidth;
               renderedHeight = containerWidth / videoRatio;
               yOffset = (containerHeight - renderedHeight) / 2;
+            } else {
+              // Scaled to cover container height, left/right gets cropped
+              renderedHeight = containerHeight;
+              renderedWidth = containerHeight * videoRatio;
+              xOffset = (containerWidth - renderedWidth) / 2;
             }
 
             const transformPoint = (p: { x: number; y: number }) => {
@@ -735,7 +737,7 @@ export default function ReceiverView() {
 
               <video
                 ref={videoRef}
-                className={`w-full h-full object-contain rounded-xl ${isScanning ? '' : 'hidden'}`}
+                className={`w-full h-full object-cover rounded-xl ${isScanning ? '' : 'hidden'}`}
                 muted
                 playsInline
               />
