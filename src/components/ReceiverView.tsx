@@ -106,6 +106,24 @@ export default function ReceiverView() {
   const metadataRef = useRef<FileMetadata | null>(null);
   const isHapticEnabledRef = useRef<boolean>(true);
 
+  // High-performance Web Worker pool and location smoothing references
+  const scanWorkersRef = useRef<Worker[]>([]);
+  const nextWorkerIdxRef = useRef<number>(0);
+  const workerActiveRef = useRef<boolean[]>([]);
+  const targetLocationRef = useRef<{
+    topLeft: { x: number; y: number };
+    topRight: { x: number; y: number };
+    bottomRight: { x: number; y: number };
+    bottomLeft: { x: number; y: number };
+  } | null>(null);
+  const renderedLocationRef = useRef<{
+    topLeft: { x: number; y: number };
+    topRight: { x: number; y: number };
+    bottomRight: { x: number; y: number };
+    bottomLeft: { x: number; y: number };
+    opacity: number;
+  } | null>(null);
+
   // Synchronize state values to refs to avoid event listener closures issues
   useEffect(() => {
     metadataRef.current = metadata;
@@ -167,6 +185,90 @@ export default function ReceiverView() {
     forceRequestPermission();
     return () => {
       stopCamera();
+    };
+  }, []);
+
+  // Initialize and manage the high-speed Web Worker pool lifecycle
+  useEffect(() => {
+    const workers: Worker[] = [];
+    const activeStates: boolean[] = [false, false];
+
+    for (let i = 0; i < 2; i++) {
+      try {
+        const w = new Worker(
+          new URL('../utils/qr-reader.worker.ts', import.meta.url),
+          { type: 'module' }
+        );
+
+        w.onmessage = (e) => {
+          const { type, result, location, width, height, error } = e.data;
+          
+          // Mark worker i as available again
+          activeStates[i] = false;
+
+          if (type === 'SCAN_RESULT' && result) {
+            handleScannedCode(result);
+
+            if (location && videoRef.current) {
+              const videoEl = videoRef.current;
+              const containerWidth = videoEl.clientWidth;
+              const containerHeight = videoEl.clientHeight;
+              const videoWidth = videoEl.videoWidth;
+              const videoHeight = videoEl.videoHeight;
+
+              if (containerWidth && containerHeight && videoWidth && videoHeight) {
+                const videoRatio = videoWidth / videoHeight;
+                const containerRatio = containerWidth / containerHeight;
+
+                let renderedWidth = containerWidth;
+                let renderedHeight = containerHeight;
+                let xOffset = 0;
+                let yOffset = 0;
+
+                if (containerRatio > videoRatio) {
+                  renderedWidth = containerWidth;
+                  renderedHeight = containerWidth / videoRatio;
+                  yOffset = (containerHeight - renderedHeight) / 2;
+                } else {
+                  renderedHeight = containerHeight;
+                  renderedWidth = containerHeight * videoRatio;
+                  xOffset = (containerWidth - renderedWidth) / 2;
+                }
+
+                const transformPoint = (p: { x: number; y: number }) => {
+                  const normX = p.x / width;
+                  const normY = p.y / height;
+                  return {
+                    x: xOffset + normX * renderedWidth,
+                    y: yOffset + normY * renderedHeight,
+                  };
+                };
+
+                const targetLocation = {
+                  topLeft: transformPoint(location.topLeftCorner),
+                  topRight: transformPoint(location.topRightCorner),
+                  bottomRight: transformPoint(location.bottomRightCorner),
+                  bottomLeft: transformPoint(location.bottomLeftCorner),
+                };
+
+                targetLocationRef.current = targetLocation;
+                lastDetectedTimeRef.current = Date.now();
+              }
+            }
+          }
+        };
+
+        workers.push(w);
+      } catch (err) {
+        console.error('Failed to create QR scanning worker:', err);
+      }
+    }
+
+    scanWorkersRef.current = workers;
+    workerActiveRef.current = activeStates;
+
+    return () => {
+      workers.forEach(w => w.terminate());
     };
   }, []);
 
@@ -324,19 +426,11 @@ export default function ReceiverView() {
     }
 
     const now = Date.now();
-    // Throttle: limit scanning to at most once every 60ms for amazing responsiveness without overhead
-    if (now - lastScanTimeRef.current < 60) {
-      requestRef.current = requestAnimationFrame(scanFrame);
-      return;
-    }
-
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
     if (video.readyState === video.HAVE_ENOUGH_DATA && ctx) {
-      lastScanTimeRef.current = now;
-
       let targetWidth = video.videoWidth;
       let targetHeight = video.videoHeight;
 
@@ -377,120 +471,92 @@ export default function ReceiverView() {
       // Draw the video frame downscaled
       ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
 
-      try {
-        // Extract the pixel data
-        const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
-
-        // Run jsQR decoding directly on the main thread
-        const code = jsQR(imageData.data, targetWidth, targetHeight, {
-          inversionAttempts: 'attemptBoth',
-        });
-
-        if (code) {
-          if (code.data) {
-            handleScannedCode(code.data);
-          }
-
-          // Compute target selection feedback location
-          const location = code.location;
-          if (location && videoRef.current) {
-            const videoEl = videoRef.current;
-            const containerWidth = videoEl.clientWidth;
-            const containerHeight = videoEl.clientHeight;
-            const videoWidth = videoEl.videoWidth;
-            const videoHeight = videoEl.videoHeight;
-
-            if (containerWidth && containerHeight && videoWidth && videoHeight) {
-              const videoRatio = videoWidth / videoHeight;
-              const containerRatio = containerWidth / containerHeight;
-
-              let renderedWidth = containerWidth;
-              let renderedHeight = containerHeight;
-              let xOffset = 0;
-              let yOffset = 0;
-
-              if (containerRatio > videoRatio) {
-                // Scaled to cover container width, top/bottom gets cropped
-                renderedWidth = containerWidth;
-                renderedHeight = containerWidth / videoRatio;
-                yOffset = (containerHeight - renderedHeight) / 2;
-              } else {
-                // Scaled to cover container height, left/right gets cropped
-                renderedHeight = containerHeight;
-                renderedWidth = containerHeight * videoRatio;
-                xOffset = (containerWidth - renderedWidth) / 2;
-              }
-
-              const transformPoint = (p: { x: number; y: number }) => {
-                const normX = p.x / targetWidth;
-                const normY = p.y / targetHeight;
-                return {
-                  x: xOffset + normX * renderedWidth,
-                  y: yOffset + normY * renderedHeight,
-                };
-              };
-
-              const targetLocation = {
-                topLeft: transformPoint(location.topLeftCorner),
-                topRight: transformPoint(location.topRightCorner),
-                bottomRight: transformPoint(location.bottomRightCorner),
-                bottomLeft: transformPoint(location.bottomLeftCorner),
-              };
-
-              // Interpolation-based coordinates stabilization to eliminate jitter completely
-              if (!smoothedLocationRef.current) {
-                smoothedLocationRef.current = targetLocation;
-              } else {
-                const k = 0.35; // Smoothing coefficient
-                smoothedLocationRef.current = {
-                  topLeft: {
-                    x: smoothedLocationRef.current.topLeft.x * (1 - k) + targetLocation.topLeft.x * k,
-                    y: smoothedLocationRef.current.topLeft.y * (1 - k) + targetLocation.topLeft.y * k,
-                  },
-                  topRight: {
-                    x: smoothedLocationRef.current.topRight.x * (1 - k) + targetLocation.topRight.x * k,
-                    y: smoothedLocationRef.current.topRight.y * (1 - k) + targetLocation.topRight.y * k,
-                  },
-                  bottomRight: {
-                    x: smoothedLocationRef.current.bottomRight.x * (1 - k) + targetLocation.bottomRight.x * k,
-                    y: smoothedLocationRef.current.bottomRight.y * (1 - k) + targetLocation.bottomRight.y * k,
-                  },
-                  bottomLeft: {
-                    x: smoothedLocationRef.current.bottomLeft.x * (1 - k) + targetLocation.bottomLeft.x * k,
-                    y: smoothedLocationRef.current.bottomLeft.y * (1 - k) + targetLocation.bottomLeft.y * k,
-                  },
-                };
-              }
-
-              lastDetectedTimeRef.current = now;
-            }
+      // Submit to an available worker in the pool
+      const workers = scanWorkersRef.current;
+      const activeStates = workerActiveRef.current;
+      if (workers.length > 0) {
+        // Find a free worker
+        let freeWorkerIdx = -1;
+        for (let i = 0; i < workers.length; i++) {
+          const idx = (nextWorkerIdxRef.current + i) % workers.length;
+          if (!activeStates[idx]) {
+            freeWorkerIdx = idx;
+            break;
           }
         }
-      } catch (err) {
-        console.error('Error during QR decoding:', err);
+
+        if (freeWorkerIdx !== -1) {
+          try {
+            const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+            activeStates[freeWorkerIdx] = true;
+            nextWorkerIdxRef.current = (freeWorkerIdx + 1) % workers.length;
+
+            workers[freeWorkerIdx].postMessage({
+              data: imageData.data,
+              width: targetWidth,
+              height: targetHeight
+            }, [imageData.data.buffer]); // Transferable
+          } catch (err) {
+            console.error('Failed to submit frame to worker:', err);
+          }
+        }
       }
+    }
 
-      // Compute smoothed visualization state with lock-on decay (grace period fade out)
-      if (smoothedLocationRef.current) {
-        const msSinceDetect = now - lastDetectedTimeRef.current;
-        if (msSinceDetect < 550) {
-          // Keep displaying tracking box; start fading out smoothly after 150ms of frame loss
-          const opacity = msSinceDetect > 150
-            ? Math.max(0.1, 1 - (msSinceDetect - 150) / 400)
-            : 1;
+    // Smooth the target overlay location at the full screen refresh rate
+    if (targetLocationRef.current) {
+      const msSinceDetect = now - lastDetectedTimeRef.current;
+      if (msSinceDetect < 550) {
+        const targetOpacity = msSinceDetect > 150
+          ? Math.max(0.01, 1 - (msSinceDetect - 150) / 400)
+          : 1;
 
-          setQrLocation({
-            ...smoothedLocationRef.current,
-            opacity
-          });
+        if (!renderedLocationRef.current) {
+          renderedLocationRef.current = {
+            ...targetLocationRef.current,
+            opacity: targetOpacity
+          };
         } else {
-          // Decay limit reached: reset smooth position and clean up tracker overlay
-          smoothedLocationRef.current = null;
+          const k = 0.22; // Smoothing coefficient per frame
+          renderedLocationRef.current = {
+            topLeft: {
+              x: renderedLocationRef.current.topLeft.x * (1 - k) + targetLocationRef.current.topLeft.x * k,
+              y: renderedLocationRef.current.topLeft.y * (1 - k) + targetLocationRef.current.topLeft.y * k,
+            },
+            topRight: {
+              x: renderedLocationRef.current.topRight.x * (1 - k) + targetLocationRef.current.topRight.x * k,
+              y: renderedLocationRef.current.topRight.y * (1 - k) + targetLocationRef.current.topRight.y * k,
+            },
+            bottomRight: {
+              x: renderedLocationRef.current.bottomRight.x * (1 - k) + targetLocationRef.current.bottomRight.x * k,
+              y: renderedLocationRef.current.bottomRight.y * (1 - k) + targetLocationRef.current.bottomRight.y * k,
+            },
+            bottomLeft: {
+              x: renderedLocationRef.current.bottomLeft.x * (1 - k) + targetLocationRef.current.bottomLeft.x * k,
+              y: renderedLocationRef.current.bottomLeft.y * (1 - k) + targetLocationRef.current.bottomLeft.y * k,
+            },
+            opacity: renderedLocationRef.current.opacity * (1 - k) + targetOpacity * k
+          };
+        }
+        setQrLocation({ ...renderedLocationRef.current });
+      } else {
+        if (renderedLocationRef.current) {
+          const k = 0.15; // Fade out rate
+          const nextOpacity = renderedLocationRef.current.opacity * (1 - k);
+          if (nextOpacity < 0.05) {
+            renderedLocationRef.current = null;
+            targetLocationRef.current = null;
+            setQrLocation(null);
+          } else {
+            renderedLocationRef.current.opacity = nextOpacity;
+            setQrLocation({ ...renderedLocationRef.current });
+          }
+        } else {
           setQrLocation(null);
         }
-      } else {
-        setQrLocation(null);
       }
+    } else {
+      setQrLocation(null);
     }
 
     requestRef.current = requestAnimationFrame(scanFrame);
