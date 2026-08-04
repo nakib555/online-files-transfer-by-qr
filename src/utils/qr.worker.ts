@@ -11,6 +11,8 @@ const ctx: Worker = self as any;
 
 let fileRef: File | null = null;
 let cachedFrames: Record<number, { size: number; data: Uint8Array }> = {};
+let targetVersion: number | undefined = undefined;
+let targetEcLevel: 'L' | 'M' | 'Q' | 'H' = 'H';
 
 // Convert character payload size to byte chunk size as a multiple of 3
 const getByteChunkSize = (charsSize: number) => {
@@ -43,6 +45,8 @@ ctx.addEventListener('message', async (e: MessageEvent) => {
     const { file, chunkSize } = data;
     fileRef = file;
     cachedFrames = {}; // Clear cache on new file load
+    targetVersion = undefined;
+    targetEcLevel = 'H';
 
     try {
       const byteChunkSize = getByteChunkSize(chunkSize);
@@ -73,6 +77,33 @@ ctx.addEventListener('message', async (e: MessageEvent) => {
       }
 
       const crc32 = crcCalculator.getValue();
+
+      // Estimate the worst-case text length to lock a single consistent QR version
+      if (totalDataChunks > 0) {
+        try {
+          const sampleStart = 0;
+          const sampleEnd = Math.min(file.size, byteChunkSize);
+          const sampleSlice = file.slice(sampleStart, sampleEnd);
+          const sampleRaw = await blobToBase64InWorker(sampleSlice);
+          const worstHeader = `${totalDataChunks}/${totalDataChunks}|`;
+          const textToEncode = worstHeader + sampleRaw;
+          const len = textToEncode.length;
+          
+          if (len > 1250) {
+            if (len <= 1630) targetEcLevel = 'Q';
+            else if (len <= 2290) targetEcLevel = 'M';
+            else targetEcLevel = 'L';
+          } else {
+            targetEcLevel = 'H';
+          }
+
+          const sampleQr = QRCode.create(textToEncode, { errorCorrectionLevel: targetEcLevel });
+          targetVersion = sampleQr.version;
+        } catch (err) {
+          console.error('Failed to pre-estimate target QR version, will fallback to dynamic sizes:', err);
+        }
+      }
+
       ctx.postMessage({
         type: 'LOAD_COMPLETE',
         totalChunksCount: totalDataChunks,
@@ -115,9 +146,17 @@ ctx.addEventListener('message', async (e: MessageEvent) => {
               else ecLevel = 'L';
             }
 
-            const qr = QRCode.create(textToEncode, {
-              errorCorrectionLevel: ecLevel,
-            });
+            let qr;
+            try {
+              qr = QRCode.create(textToEncode, {
+                version: targetVersion,
+                errorCorrectionLevel: targetVersion ? targetEcLevel : ecLevel,
+              });
+            } catch (qrErr) {
+              qr = QRCode.create(textToEncode, {
+                errorCorrectionLevel: ecLevel,
+              });
+            }
 
             const size = qr.modules.size;
             const matrixData = new Uint8Array(qr.modules.data);
@@ -201,9 +240,17 @@ ctx.addEventListener('message', async (e: MessageEvent) => {
       }
 
       // Generate the raw QR code matrix
-      const qr = QRCode.create(textToEncode, {
-        errorCorrectionLevel: ecLevel,
-      });
+      let qr;
+      try {
+        qr = QRCode.create(textToEncode, {
+          version: targetVersion,
+          errorCorrectionLevel: targetVersion ? targetEcLevel : ecLevel,
+        });
+      } catch (qrErr) {
+        qr = QRCode.create(textToEncode, {
+          errorCorrectionLevel: ecLevel,
+        });
+      }
 
       const size = qr.modules.size;
       const matrixData = new Uint8Array(qr.modules.data);

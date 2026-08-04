@@ -31,6 +31,7 @@ export default function SenderView() {
   const [pregenIndex, setPregenIndex] = useState<number>(0);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [qrError, setQrError] = useState<string>('');
+  const [isLaserLockActive, setIsLaserLockActive] = useState<boolean>(false);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const startTimeRef = useRef<number | null>(null);
@@ -38,11 +39,17 @@ export default function SenderView() {
 
   const workerRef = useRef<Worker | null>(null);
   const currentIndexRef = useRef<number>(0);
+  const isLaserLockActiveRef = useRef<boolean>(false);
 
   // Sync currentIndex ref for the Worker event listener closure
   useEffect(() => {
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
+
+  // Sync laser lock ref for the Worker event listener closure
+  useEffect(() => {
+    isLaserLockActiveRef.current = isLaserLockActive;
+  }, [isLaserLockActive]);
 
   // Handle active adaptive chunk size calculations based on file and device/screen conditions
   useEffect(() => {
@@ -104,6 +111,108 @@ export default function SenderView() {
       }
     }
     setQrError('');
+
+    // Draw Laser-Lock Target Selection Feedback Overlay if active
+    if (isLaserLockActiveRef.current) {
+      ctx.save();
+      
+      const time = performance.now();
+      
+      // Outer Target Border Box (neon red/violet glowing borders)
+      ctx.strokeStyle = '#ef4444'; // Red laser
+      ctx.lineWidth = 6;
+      
+      // Corner brackets
+      const margin = 20;
+      const bracketLen = 80;
+      const w = canvasSize;
+      const h = canvasSize;
+      
+      // Top Left corner
+      ctx.beginPath();
+      ctx.moveTo(margin + bracketLen, margin);
+      ctx.lineTo(margin, margin);
+      ctx.lineTo(margin, margin + bracketLen);
+      ctx.stroke();
+      
+      // Top Right corner
+      ctx.beginPath();
+      ctx.moveTo(w - margin - bracketLen, margin);
+      ctx.lineTo(w - margin, margin);
+      ctx.lineTo(w - margin, margin + bracketLen);
+      ctx.stroke();
+      
+      // Bottom Left corner
+      ctx.beginPath();
+      ctx.moveTo(margin + bracketLen, h - margin);
+      ctx.lineTo(margin, h - margin);
+      ctx.lineTo(margin, h - margin - bracketLen);
+      ctx.stroke();
+      
+      // Bottom Right corner
+      ctx.beginPath();
+      ctx.moveTo(w - margin - bracketLen, h - margin);
+      ctx.lineTo(w - margin, h - margin);
+      ctx.lineTo(w - margin, h - margin - bracketLen);
+      ctx.stroke();
+
+      // Center crosshair circles (concentric circles at the very center)
+      const cx = w / 2;
+      const cy = h / 2;
+      
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 180, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.75)';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 80, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Center dot
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Flashing crosshair guidelines (axis lines)
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.25)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      // Horizontal lines
+      ctx.moveTo(margin + 20, cy);
+      ctx.lineTo(cx - 90, cy);
+      ctx.moveTo(cx + 90, cy);
+      ctx.lineTo(w - margin - 20, cy);
+      // Vertical lines
+      ctx.moveTo(cx, margin + 20);
+      ctx.lineTo(cx, cy - 90);
+      ctx.moveTo(cx, cy + 90);
+      ctx.lineTo(cx, h - margin - 20);
+      ctx.stroke();
+
+      // Interactive laser sweeping bar (pulsing up/down)
+      const sweepY = margin + ((time / 6) % (h - 2 * margin));
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(margin, sweepY);
+      ctx.lineTo(w - margin, sweepY);
+      ctx.stroke();
+      
+      // Laser light beam fill gradient (subtle gradient below/above the laser sweep)
+      const grad = ctx.createLinearGradient(0, sweepY - 40, 0, sweepY + 40);
+      grad.addColorStop(0, 'rgba(239, 68, 68, 0)');
+      grad.addColorStop(0.5, 'rgba(239, 68, 68, 0.12)');
+      grad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(margin, sweepY - 40, w - 2 * margin, 80);
+
+      ctx.restore();
+    }
   };
 
   // Initialize and manage the Web Worker life cycle
@@ -186,9 +295,9 @@ export default function SenderView() {
 
   // Handle active transmission interval using high-performance requestAnimationFrame
   useEffect(() => {
-    if (!isPlaying || totalChunksCount === 0 || isProcessing) return;
+    if ((!isPlaying && !isLaserLockActive) || totalChunksCount === 0 || isProcessing) return;
 
-    if (!startTimeRef.current) {
+    if (isPlaying && !startTimeRef.current) {
       startTimeRef.current = performance.now() - elapsedTime;
     }
 
@@ -196,21 +305,40 @@ export default function SenderView() {
     let lastFrameTime = performance.now();
     
     const tick = (now: number) => {
-      const msPerFrame = 1000 / fps;
-      const elapsedSinceLast = now - lastFrameTime;
-      
-      if (elapsedSinceLast >= msPerFrame) {
-        const framesToAdvance = Math.floor(elapsedSinceLast / msPerFrame);
-        setCurrentIndex((prev) => {
-          const nextIdx = (prev + framesToAdvance) % (totalChunksCount + 1);
-          return nextIdx;
-        });
+      if (isPlaying) {
+        const msPerFrame = 1000 / fps;
+        const elapsedSinceLast = now - lastFrameTime;
         
-        lastFrameTime = now - (elapsedSinceLast % msPerFrame);
-      }
+        if (elapsedSinceLast >= msPerFrame) {
+          const framesToAdvance = Math.floor(elapsedSinceLast / msPerFrame);
+          setCurrentIndex((prev) => {
+            const nextIdx = (prev + framesToAdvance) % (totalChunksCount + 1);
+            return nextIdx;
+          });
+          
+          lastFrameTime = now - (elapsedSinceLast % msPerFrame);
+        }
 
-      if (startTimeRef.current) {
-        setElapsedTime(performance.now() - startTimeRef.current);
+        if (startTimeRef.current) {
+          setElapsedTime(performance.now() - startTimeRef.current);
+        }
+      } else if (isLaserLockActive) {
+        // Redraw current frame to animate the laser sweep smoothly at 60 FPS when paused
+        const elapsedSinceLast = now - lastFrameTime;
+        if (elapsedSinceLast >= 16.67) { // 60 FPS
+          if (workerRef.current) {
+            workerRef.current.postMessage({
+              type: 'GENERATE_FRAME',
+              data: {
+                index: currentIndex,
+                chunkSize,
+                totalChunksCount,
+                computedCrc32
+              }
+            });
+          }
+          lastFrameTime = now;
+        }
       }
 
       animFrameId = requestAnimationFrame(tick);
@@ -221,9 +349,9 @@ export default function SenderView() {
     return () => {
       cancelAnimationFrame(animFrameId);
     };
-  }, [isPlaying, fps, totalChunksCount, isProcessing]);
+  }, [isPlaying, isLaserLockActive, fps, totalChunksCount, isProcessing, currentIndex, chunkSize, computedCrc32]);
 
-  // Render QR Code onto canvas via the Web Worker when index changes
+  // Render QR Code onto canvas via the Web Worker when index or laser lock changes
   useEffect(() => {
     if (!file || totalChunksCount === 0 || isProcessing || !workerRef.current) return;
 
@@ -236,7 +364,7 @@ export default function SenderView() {
         computedCrc32
       }
     });
-  }, [currentIndex, file, totalChunksCount, computedCrc32, chunkSize, isProcessing]);
+  }, [currentIndex, file, totalChunksCount, computedCrc32, chunkSize, isProcessing, isLaserLockActive]);
 
   const handleFileChange = async (selectedFile: File) => {
     setFile(selectedFile);
@@ -285,10 +413,11 @@ export default function SenderView() {
     setCurrentIndex((prev) => (prev - 1 < 0 ? totalChunksCount : prev - 1));
   };
 
-  const handlePreset = (selectedFps: number, selectedSize: number) => {
+  const handlePreset = (selectedFps: number, selectedSize: number, laserLock = false) => {
     setIsAdaptiveEnabled(false);
     setFps(selectedFps);
     setChunkSize(selectedSize);
+    setIsLaserLockActive(laserLock);
     handleReset();
   };
 
@@ -693,6 +822,48 @@ export default function SenderView() {
               )}
             </div>
 
+            {/* Laser-Lock Targeting Feedback System */}
+            <div className="border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2.5 h-2.5 rounded-full ${isLaserLockActive ? 'bg-red-500 animate-pulse' : 'bg-slate-300'}`}></div>
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">LASER-LOCK OPTICAL LINK</h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsLaserLockActive(!isLaserLockActive)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    isLaserLockActive ? 'bg-red-600' : 'bg-slate-200'
+                  }`}
+                  title="Toggle Laser-Lock Target Selection Feedback"
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      isLaserLockActive ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {isLaserLockActive ? (
+                <div className="p-3 bg-red-500/5 border border-red-500/20 rounded-lg text-[11px] space-y-1.5 leading-relaxed">
+                  <div className="flex items-center justify-between text-red-600 font-bold">
+                    <span>LASER-LOCK TARGETING ACTIVE</span>
+                    <span className="px-1.5 py-0.5 bg-red-600 text-white text-[8px] rounded uppercase animate-pulse">LOCKING</span>
+                  </div>
+                  <p className="text-slate-600 font-sans">
+                    Projecting interactive corner tracking lines, center crosshairs, and optical alignment lasers for 100% reliable 240 FPS optical synchronization.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3 border border-dashed border-slate-200 bg-slate-50/30 rounded-lg text-[11px] leading-relaxed text-slate-500 font-sans">
+                  <p>
+                    Laser-Lock optical guidance is currently offline. Enable to project active alignment graphics.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Transmission Presets Configuration */}
             <div className="border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-4">
               <div className="flex items-center gap-2">
@@ -700,13 +871,27 @@ export default function SenderView() {
                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Optical Presets</h4>
               </div>
 
-              <div className="grid grid-cols-5 gap-1.5">
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
                 <button
                   type="button"
-                  onClick={() => handlePreset(240, 1200)}
+                  onClick={() => handlePreset(240, 2000, true)}
                   className={`p-2 rounded border text-left cursor-pointer transition-all ${
-                    fps === 240 && chunkSize === 1200
-                      ? 'bg-indigo-600/10 border-indigo-600 text-indigo-500'
+                    fps === 240 && chunkSize === 2000 && isLaserLockActive
+                      ? 'bg-red-600/10 border-red-600 text-red-500 font-extrabold'
+                      : 'bg-slate-50/40 border-slate-200 hover:border-slate-300 text-slate-500'
+                  }`}
+                  title="Laser-Lock Target Selection Link"
+                >
+                  <span className="text-[9px] font-extrabold block text-red-600">LASER-LOCK</span>
+                  <span className="text-[8px] text-slate-500 block font-bold">240 FPS</span>
+                  <span className="text-[8px] text-slate-500 block">2.0K Ch</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePreset(240, 1200, false)}
+                  className={`p-2 rounded border text-left cursor-pointer transition-all ${
+                    fps === 240 && chunkSize === 1200 && !isLaserLockActive
+                      ? 'bg-indigo-600/10 border-indigo-600 text-indigo-500 font-extrabold'
                       : 'bg-slate-50/40 border-slate-200 hover:border-slate-300 text-slate-500'
                   }`}
                   title="Supreme High-Speed"
@@ -717,10 +902,10 @@ export default function SenderView() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handlePreset(120, 800)}
+                  onClick={() => handlePreset(120, 800, false)}
                   className={`p-2 rounded border text-left cursor-pointer transition-all ${
-                    fps === 120 && chunkSize === 800
-                      ? 'bg-indigo-600/10 border-indigo-600 text-indigo-500'
+                    fps === 120 && chunkSize === 800 && !isLaserLockActive
+                      ? 'bg-indigo-600/10 border-indigo-600 text-indigo-500 font-extrabold'
                       : 'bg-slate-50/40 border-slate-200 hover:border-slate-300 text-slate-500'
                   }`}
                   title="Giga Link Speed"
@@ -731,10 +916,10 @@ export default function SenderView() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handlePreset(60, 400)}
+                  onClick={() => handlePreset(60, 400, false)}
                   className={`p-2 rounded border text-left cursor-pointer transition-all ${
-                    fps === 60 && chunkSize === 400
-                      ? 'bg-indigo-600/10 border-indigo-600 text-indigo-500'
+                    fps === 60 && chunkSize === 400 && !isLaserLockActive
+                      ? 'bg-indigo-600/10 border-indigo-600 text-indigo-500 font-extrabold'
                       : 'bg-slate-50/40 border-slate-200 hover:border-slate-300 text-slate-500'
                   }`}
                   title="Cyber Speed"
@@ -745,10 +930,10 @@ export default function SenderView() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handlePreset(15, 150)}
+                  onClick={() => handlePreset(15, 150, false)}
                   className={`p-2 rounded border text-left cursor-pointer transition-all ${
-                    fps === 15 && chunkSize === 150
-                      ? 'bg-indigo-600/10 border-indigo-600 text-indigo-500'
+                    fps === 15 && chunkSize === 150 && !isLaserLockActive
+                      ? 'bg-indigo-600/10 border-indigo-600 text-indigo-500 font-extrabold'
                       : 'bg-slate-50/40 border-slate-200 hover:border-slate-300 text-slate-500'
                   }`}
                   title="Balanced Stable Speed"
@@ -759,9 +944,9 @@ export default function SenderView() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handlePreset(8, 100)}
+                  onClick={() => handlePreset(8, 100, false)}
                   className={`p-2 rounded border text-left cursor-pointer transition-all ${
-                    fps === 8 && chunkSize === 100
+                    fps === 8 && chunkSize === 100 && !isLaserLockActive
                       ? 'bg-indigo-600/10 border-indigo-600 text-indigo-500'
                       : 'bg-slate-50/40 border-slate-200 hover:border-slate-300 text-slate-500'
                   }`}
@@ -806,7 +991,7 @@ export default function SenderView() {
                   <input
                     type="range"
                     min="50"
-                    max="1800"
+                    max="2500"
                     step="10"
                     value={chunkSize}
                     onChange={(e) => {
@@ -817,7 +1002,7 @@ export default function SenderView() {
                   />
                   <div className="flex justify-between text-[9px] text-slate-400">
                     <span>50 CH (EASY SCAN)</span>
-                    <span>1800 CH (COMPACT SAFE-LINK)</span>
+                    <span>2500 CH (LASER-LOCK DENSITY)</span>
                   </div>
                 </div>
               </div>

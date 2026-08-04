@@ -28,6 +28,7 @@ export default function ReceiverView() {
     opacity: number;
   } | null>(null);
   const [scanResolutionMode, setScanResolutionMode] = useState<'auto' | 'high-res' | 'high-speed'>('auto');
+  const [isLaserLockReceiverActive, setIsLaserLockReceiverActive] = useState<boolean>(true);
   
   const smoothedLocationRef = useRef<{
     topLeft: { x: number; y: number };
@@ -871,53 +872,156 @@ export default function ReceiverView() {
                   {/* Glowing semi-transparent polygon over the QR code */}
                   <polygon
                     points={`${qrLocation.topLeft.x},${qrLocation.topLeft.y} ${qrLocation.topRight.x},${qrLocation.topRight.y} ${qrLocation.bottomRight.x},${qrLocation.bottomRight.y} ${qrLocation.bottomLeft.x},${qrLocation.bottomLeft.y}`}
-                    fill={`rgba(99, 102, 241, ${0.18 * qrLocation.opacity})`}
-                    stroke={`rgba(79, 70, 229, ${qrLocation.opacity})`}
-                    strokeWidth="3.5"
+                    fill={isLaserLockReceiverActive ? `rgba(239, 68, 68, ${0.15 * qrLocation.opacity})` : `rgba(99, 102, 241, ${0.18 * qrLocation.opacity})`}
+                    stroke={isLaserLockReceiverActive ? `rgba(239, 68, 68, ${qrLocation.opacity})` : `rgba(79, 70, 229, ${qrLocation.opacity})`}
+                    strokeWidth={isLaserLockReceiverActive ? "4" : "3.5"}
                     strokeLinejoin="round"
                     className="shadow-lg"
                     style={{ transition: 'fill 100ms, stroke 100ms' }}
                   />
 
-                  {/* Tracking dot elements on the corners */}
-                  <circle cx={qrLocation.topLeft.x} cy={qrLocation.topLeft.y} r="6" fill="#4f46e5" fillOpacity={qrLocation.opacity * 0.4} className="animate-ping" />
-                  <circle cx={qrLocation.topLeft.x} cy={qrLocation.topLeft.y} r="3" fill="#6366f1" fillOpacity={qrLocation.opacity} />
+                  {/* Corner Target brackets */}
+                  {isLaserLockReceiverActive ? (
+                    <>
+                      {/* Top Left corner brackets */}
+                      <path
+                        d={`M ${qrLocation.topLeft.x + (qrLocation.topRight.x - qrLocation.topLeft.x)*0.25} ${qrLocation.topLeft.y + (qrLocation.bottomLeft.y - qrLocation.topLeft.y)*0.25} L ${qrLocation.topLeft.x} ${qrLocation.topLeft.y} L ${qrLocation.topLeft.x + (qrLocation.bottomLeft.x - qrLocation.topLeft.x)*0.25} ${qrLocation.topLeft.y + (qrLocation.bottomLeft.y - qrLocation.topLeft.y)*0.25}`}
+                        fill="none"
+                        stroke="#ef4444"
+                        strokeWidth="4"
+                        opacity={qrLocation.opacity}
+                      />
+                      {/* Top Right corner brackets */}
+                      <path
+                        d={`M ${qrLocation.topRight.x - (qrLocation.topRight.x - qrLocation.topLeft.x)*0.25} ${qrLocation.topRight.y + (qrLocation.bottomRight.y - qrLocation.topRight.y)*0.25} L ${qrLocation.topRight.x} ${qrLocation.topRight.y} L ${qrLocation.topRight.x - (qrLocation.topRight.x - qrLocation.bottomLeft.x)*0.25} ${qrLocation.topRight.y + (qrLocation.bottomRight.y - qrLocation.topRight.y)*0.25}`}
+                        fill="none"
+                        stroke="#ef4444"
+                        strokeWidth="4"
+                        opacity={qrLocation.opacity}
+                      />
+                      {/* Bottom Right corner brackets */}
+                      <path
+                        d={`M ${qrLocation.bottomRight.x - (qrLocation.bottomRight.x - qrLocation.bottomLeft.x)*0.25} ${qrLocation.bottomRight.y - (qrLocation.bottomRight.y - qrLocation.topRight.y)*0.25} L ${qrLocation.bottomRight.x} ${qrLocation.bottomRight.y} L ${qrLocation.bottomRight.x - (qrLocation.bottomRight.x - qrLocation.bottomLeft.x)*0.25} ${qrLocation.bottomRight.y - (qrLocation.bottomRight.y - qrLocation.topRight.y)*0.25}`}
+                        fill="none"
+                        stroke="#ef4444"
+                        strokeWidth="4"
+                        opacity={qrLocation.opacity}
+                      />
+                      {/* Bottom Left corner brackets */}
+                      <path
+                        d={`M ${qrLocation.bottomLeft.x + (qrLocation.bottomRight.x - qrLocation.bottomLeft.x)*0.25} ${qrLocation.bottomLeft.y - (qrLocation.bottomLeft.y - qrLocation.topLeft.y)*0.25} L ${qrLocation.bottomLeft.x} ${qrLocation.bottomLeft.y} L ${qrLocation.bottomLeft.x + (qrLocation.bottomRight.x - qrLocation.bottomLeft.x)*0.25} ${qrLocation.bottomLeft.y - (qrLocation.bottomLeft.y - qrLocation.topLeft.y)*0.25}`}
+                        fill="none"
+                        stroke="#ef4444"
+                        strokeWidth="4"
+                        opacity={qrLocation.opacity}
+                      />
 
-                  <circle cx={qrLocation.topRight.x} cy={qrLocation.topRight.y} r="6" fill="#4f46e5" fillOpacity={qrLocation.opacity * 0.4} className="animate-ping" />
-                  <circle cx={qrLocation.topRight.x} cy={qrLocation.topRight.y} r="3" fill="#6366f1" fillOpacity={qrLocation.opacity} />
+                      {/* Concentric rotating radar rings and crosshair centering */}
+                      {(() => {
+                        const cx = (qrLocation.topLeft.x + qrLocation.topRight.x + qrLocation.bottomRight.x + qrLocation.bottomLeft.x) / 4;
+                        const cy = (qrLocation.topLeft.y + qrLocation.topRight.y + qrLocation.bottomRight.y + qrLocation.bottomLeft.y) / 4;
+                        const dx = qrLocation.topRight.x - qrLocation.topLeft.x;
+                        const dy = qrLocation.topRight.y - qrLocation.topLeft.y;
+                        const qrSize = Math.sqrt(dx * dx + dy * dy);
+                        const r1 = qrSize * 0.45;
+                        const r2 = qrSize * 0.22;
+                        
+                        return (
+                          <>
+                            {/* Outer targeting crosshair ring */}
+                            <circle
+                              cx={cx}
+                              cy={cy}
+                              r={r1}
+                              fill="none"
+                              stroke="rgba(239, 68, 68, 0.45)"
+                              strokeWidth="2.5"
+                              strokeDasharray="8 6"
+                              className="animate-[spin_12s_linear_infinite]"
+                              opacity={qrLocation.opacity}
+                            />
+                            {/* Inner targeting ring */}
+                            <circle
+                              cx={cx}
+                              cy={cy}
+                              r={r2}
+                              fill="none"
+                              stroke="rgba(239, 68, 68, 0.75)"
+                              strokeWidth="2"
+                              strokeDasharray="4 4"
+                              className="animate-[spin_4s_linear_infinite]"
+                              opacity={qrLocation.opacity}
+                            />
+                            {/* Center Target Lock Bullseye Dot */}
+                            <circle
+                              cx={cx}
+                              cy={cy}
+                              r="4"
+                              fill="#ef4444"
+                              className="animate-pulse"
+                              opacity={qrLocation.opacity}
+                            />
 
-                  <circle cx={qrLocation.bottomRight.x} cy={qrLocation.bottomRight.y} r="6" fill="#4f46e5" fillOpacity={qrLocation.opacity * 0.4} className="animate-ping" />
-                  <circle cx={qrLocation.bottomRight.x} cy={qrLocation.bottomRight.y} r="3" fill="#6366f1" fillOpacity={qrLocation.opacity} />
+                            {/* Axis targeting grid crosshairs lines */}
+                            <line x1={cx - r1 - 10} y1={cy} x2={cx - 10} y2={cy} stroke="rgba(239, 68, 68, 0.35)" strokeWidth="1.5" opacity={qrLocation.opacity} />
+                            <line x1={cx + 10} y1={cy} x2={cx + r1 + 10} y2={cy} stroke="rgba(239, 68, 68, 0.35)" strokeWidth="1.5" opacity={qrLocation.opacity} />
+                            <line x1={cx} y1={cy - r1 - 10} x2={cx} y2={cy - 10} stroke="rgba(239, 68, 68, 0.35)" strokeWidth="1.5" opacity={qrLocation.opacity} />
+                            <line x1={cx} y1={cy + 10} x2={cx} y2={cy + r1 + 10} stroke="rgba(239, 68, 68, 0.35)" strokeWidth="1.5" opacity={qrLocation.opacity} />
 
-                  <circle cx={qrLocation.bottomLeft.x} cy={qrLocation.bottomLeft.y} r="6" fill="#4f46e5" fillOpacity={qrLocation.opacity * 0.4} className="animate-ping" />
-                  <circle cx={qrLocation.bottomLeft.x} cy={qrLocation.bottomLeft.y} r="3" fill="#6366f1" fillOpacity={qrLocation.opacity} />
+                            {/* Neon target status tooltip tag */}
+                            <g transform={`translate(${cx}, ${Math.min(qrLocation.topLeft.y, qrLocation.topRight.y) - 20})`} opacity={qrLocation.opacity}>
+                              <rect x="-65" y="-12" width="130" height="18" rx="4" fill="#ef4444" className="shadow-lg animate-pulse" />
+                              <text textAnchor="middle" fill="#ffffff" fontSize="8px" fontWeight="bold" fontFamily="monospace" dominantBaseline="middle">
+                                LASER-LOCK DETECTED
+                              </text>
+                            </g>
+                          </>
+                        );
+                      })()}
+                    </>
+                  ) : (
+                    <>
+                      {/* Standard Tracking elements */}
+                      <circle cx={qrLocation.topLeft.x} cy={qrLocation.topLeft.y} r="6" fill="#4f46e5" fillOpacity={qrLocation.opacity * 0.4} className="animate-ping" />
+                      <circle cx={qrLocation.topLeft.x} cy={qrLocation.topLeft.y} r="3" fill="#6366f1" fillOpacity={qrLocation.opacity} />
 
-                  {/* "SECURE MATCH" status tooltip attached to the top edge of the selection bounding box */}
-                  <g 
-                    transform={`translate(${(qrLocation.topLeft.x + qrLocation.topRight.x) / 2}, ${Math.min(qrLocation.topLeft.y, qrLocation.topRight.y) - 14})`}
-                    opacity={qrLocation.opacity}
-                    style={{ transition: 'opacity 100ms' }}
-                  >
-                    <rect
-                      x="-55"
-                      y="-12"
-                      width="110"
-                      height="18"
-                      rx="4"
-                      fill="#4f46e5"
-                      className="opacity-95"
-                    />
-                    <text
-                      textAnchor="middle"
-                      fill="#ffffff"
-                      fontSize="9px"
-                      fontWeight="bold"
-                      fontFamily="monospace"
-                      dominantBaseline="middle"
-                    >
-                      SECURE MATCH
-                    </text>
-                  </g>
+                      <circle cx={qrLocation.topRight.x} cy={qrLocation.topRight.y} r="6" fill="#4f46e5" fillOpacity={qrLocation.opacity * 0.4} className="animate-ping" />
+                      <circle cx={qrLocation.topRight.x} cy={qrLocation.topRight.y} r="3" fill="#6366f1" fillOpacity={qrLocation.opacity} />
+
+                      <circle cx={qrLocation.bottomRight.x} cy={qrLocation.bottomRight.y} r="6" fill="#4f46e5" fillOpacity={qrLocation.opacity * 0.4} className="animate-ping" />
+                      <circle cx={qrLocation.bottomRight.x} cy={qrLocation.bottomRight.y} r="3" fill="#6366f1" fillOpacity={qrLocation.opacity} />
+
+                      <circle cx={qrLocation.bottomLeft.x} cy={qrLocation.bottomLeft.y} r="6" fill="#4f46e5" fillOpacity={qrLocation.opacity * 0.4} className="animate-ping" />
+                      <circle cx={qrLocation.bottomLeft.x} cy={qrLocation.bottomLeft.y} r="3" fill="#6366f1" fillOpacity={qrLocation.opacity} />
+
+                      {/* "SECURE MATCH" status tooltip */}
+                      <g 
+                        transform={`translate(${(qrLocation.topLeft.x + qrLocation.topRight.x) / 2}, ${Math.min(qrLocation.topLeft.y, qrLocation.topRight.y) - 14})`}
+                        opacity={qrLocation.opacity}
+                        style={{ transition: 'opacity 100ms' }}
+                      >
+                        <rect
+                          x="-55"
+                          y="-12"
+                          width="110"
+                          height="18"
+                          rx="4"
+                          fill="#4f46e5"
+                          className="opacity-95"
+                        />
+                        <text
+                          textAnchor="middle"
+                          fill="#ffffff"
+                          fontSize="9px"
+                          fontWeight="bold"
+                          fontFamily="monospace"
+                          dominantBaseline="middle"
+                        >
+                          SECURE MATCH
+                        </text>
+                      </g>
+                    </>
+                  )}
                 </svg>
               )}
 
@@ -1003,6 +1107,28 @@ export default function ReceiverView() {
                     High-Speed
                   </button>
                 </div>
+              </div>
+
+              {/* Laser-Lock Tracking HUD Toggle */}
+              <div className="flex items-center justify-between border-t border-slate-100 pt-2 px-0.5">
+                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${isLaserLockReceiverActive ? 'bg-red-500 animate-pulse' : 'bg-slate-300'}`}></span>
+                  Laser-Lock Targeting HUD
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsLaserLockReceiverActive(!isLaserLockReceiverActive)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    isLaserLockReceiverActive ? 'bg-red-600' : 'bg-slate-200'
+                  }`}
+                  title="Toggle Laser-Lock targeting overlays"
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      isLaserLockReceiverActive ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
               </div>
 
               {/* Tactile Haptic Clicks toggle switch */}
