@@ -13,6 +13,7 @@ import {
   parseChunk, parseMetadata, formatBytes, CRC32,
   saveChunkToDB, getChunkFromDB, clearSession, downloadFileFromDB 
 } from '../utils/fileHelper';
+import jsQR from 'jsqr';
 
 export default function ReceiverView() {
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
@@ -89,8 +90,6 @@ export default function ReceiverView() {
   const requestRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const lastScanTimeRef = useRef<number>(0);
-  const scanWorkerRef = useRef<Worker | null>(null);
-  const isDecodingRef = useRef<boolean>(false);
   const metadataRef = useRef<FileMetadata | null>(null);
   const isHapticEnabledRef = useRef<boolean>(true);
 
@@ -103,82 +102,9 @@ export default function ReceiverView() {
     isHapticEnabledRef.current = isHapticEnabled;
   }, [isHapticEnabled]);
 
-  // Initialize background QR reader Web Worker on mount
+  // Clean up timers on unmount
   useEffect(() => {
-    const worker = new Worker(
-      new URL('../utils/qr-reader.worker.ts', import.meta.url),
-      { type: 'module' }
-    );
-    scanWorkerRef.current = worker;
-
-    worker.onmessage = (e) => {
-      const { type, result, location, width, height, error } = e.data;
-      isDecodingRef.current = false;
-
-      if (type === 'SCAN_RESULT') {
-        if (result) {
-          handleScannedCode(result);
-        }
-
-        if (location && videoRef.current) {
-          const video = videoRef.current;
-          const containerWidth = video.clientWidth;
-          const containerHeight = video.clientHeight;
-          const videoWidth = video.videoWidth;
-          const videoHeight = video.videoHeight;
-
-          if (containerWidth && containerHeight && videoWidth && videoHeight) {
-            const videoRatio = videoWidth / videoHeight;
-            const containerRatio = containerWidth / containerHeight;
-
-            let renderedWidth = containerWidth;
-            let renderedHeight = containerHeight;
-            let xOffset = 0;
-            let yOffset = 0;
-
-            if (containerRatio > videoRatio) {
-              // Scaled to cover container width, top/bottom gets cropped
-              renderedWidth = containerWidth;
-              renderedHeight = containerWidth / videoRatio;
-              yOffset = (containerHeight - renderedHeight) / 2;
-            } else {
-              // Scaled to cover container height, left/right gets cropped
-              renderedHeight = containerHeight;
-              renderedWidth = containerHeight * videoRatio;
-              xOffset = (containerWidth - renderedWidth) / 2;
-            }
-
-            const transformPoint = (p: { x: number; y: number }) => {
-              const normX = p.x / width;
-              const normY = p.y / height;
-              return {
-                x: xOffset + normX * renderedWidth,
-                y: yOffset + normY * renderedHeight,
-              };
-            };
-
-            setQrLocation({
-              topLeft: transformPoint(location.topLeftCorner),
-              topRight: transformPoint(location.topRightCorner),
-              bottomRight: transformPoint(location.bottomRightCorner),
-              bottomLeft: transformPoint(location.bottomLeftCorner),
-            });
-
-            if (qrLocationTimeoutRef.current) {
-              clearTimeout(qrLocationTimeoutRef.current);
-            }
-            qrLocationTimeoutRef.current = setTimeout(() => {
-              setQrLocation(null);
-            }, 180);
-          }
-        }
-      } else if (type === 'SCAN_ERROR') {
-        console.error('QR reader worker error:', error);
-      }
-    };
-
     return () => {
-      worker.terminate();
       if (qrLocationTimeoutRef.current) {
         clearTimeout(qrLocationTimeoutRef.current);
       }
@@ -390,14 +316,8 @@ export default function ReceiverView() {
     }
 
     const now = Date.now();
-    // Throttle: limit scanning to at most once every 80ms (approx 12 FPS)
-    if (now - lastScanTimeRef.current < 80) {
-      requestRef.current = requestAnimationFrame(scanFrame);
-      return;
-    }
-
-    // Skip frame if worker is currently decoding another frame to avoid backlog queues
-    if (isDecodingRef.current || !scanWorkerRef.current) {
+    // Throttle: limit scanning to at most once every 60ms for amazing responsiveness without overhead
+    if (now - lastScanTimeRef.current < 60) {
       requestRef.current = requestAnimationFrame(scanFrame);
       return;
     }
@@ -412,8 +332,9 @@ export default function ReceiverView() {
       let targetWidth = video.videoWidth;
       let targetHeight = video.videoHeight;
 
-      // Scale down image to 480px max dimension for extremely fast decoding
-      const maxDimension = 480;
+      // Scale down image to 720px max dimension for excellent balance of speed and high-density QR decoding accuracy!
+      // This is crucial: 480px was too low for the high density QR code, but 720px is perfect.
+      const maxDimension = 720;
       if (targetWidth > maxDimension || targetHeight > maxDimension) {
         if (targetWidth > targetHeight) {
           targetHeight = Math.round((targetHeight * maxDimension) / targetWidth);
@@ -437,16 +358,73 @@ export default function ReceiverView() {
         // Extract the pixel data
         const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
 
-        // Run background QR decoding using transferable zero-copy buffer transfer
-        isDecodingRef.current = true;
-        scanWorkerRef.current.postMessage({
-          data: imageData.data,
-          width: targetWidth,
-          height: targetHeight
-        }, [imageData.data.buffer]);
+        // Run jsQR decoding directly on the main thread
+        const code = jsQR(imageData.data, targetWidth, targetHeight, {
+          inversionAttempts: 'attemptBoth',
+        });
+
+        if (code) {
+          if (code.data) {
+            handleScannedCode(code.data);
+          }
+
+          // Compute target selection feedback location
+          const location = code.location;
+          if (location && videoRef.current) {
+            const videoEl = videoRef.current;
+            const containerWidth = videoEl.clientWidth;
+            const containerHeight = videoEl.clientHeight;
+            const videoWidth = videoEl.videoWidth;
+            const videoHeight = videoEl.videoHeight;
+
+            if (containerWidth && containerHeight && videoWidth && videoHeight) {
+              const videoRatio = videoWidth / videoHeight;
+              const containerRatio = containerWidth / containerHeight;
+
+              let renderedWidth = containerWidth;
+              let renderedHeight = containerHeight;
+              let xOffset = 0;
+              let yOffset = 0;
+
+              if (containerRatio > videoRatio) {
+                // Scaled to cover container width, top/bottom gets cropped
+                renderedWidth = containerWidth;
+                renderedHeight = containerWidth / videoRatio;
+                yOffset = (containerHeight - renderedHeight) / 2;
+              } else {
+                // Scaled to cover container height, left/right gets cropped
+                renderedHeight = containerHeight;
+                renderedWidth = containerHeight * videoRatio;
+                xOffset = (containerWidth - renderedWidth) / 2;
+              }
+
+              const transformPoint = (p: { x: number; y: number }) => {
+                const normX = p.x / targetWidth;
+                const normY = p.y / targetHeight;
+                return {
+                  x: xOffset + normX * renderedWidth,
+                  y: yOffset + normY * renderedHeight,
+                };
+              };
+
+              setQrLocation({
+                topLeft: transformPoint(location.topLeftCorner),
+                topRight: transformPoint(location.topRightCorner),
+                bottomRight: transformPoint(location.bottomRightCorner),
+                bottomLeft: transformPoint(location.bottomLeftCorner),
+              });
+
+              if (qrLocationTimeoutRef.current) {
+                clearTimeout(qrLocationTimeoutRef.current);
+              }
+              qrLocationTimeoutRef.current = setTimeout(() => {
+                setQrLocation(null);
+              }, 180);
+            }
+          }
+        }
       } catch (err) {
-        console.error('Error postMessage to scanner worker:', err);
-        isDecodingRef.current = false;
+        console.error('Error during QR decoding:', err);
       }
     }
 
