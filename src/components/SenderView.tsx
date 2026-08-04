@@ -6,7 +6,7 @@
 import React, { useState, useRef, useEffect, DragEvent } from 'react';
 import { 
   Upload, Play, Pause, SkipForward, SkipBack, RefreshCw, 
-  FileText, Sliders, Settings, Check, Zap, AlertCircle
+  FileText, Sliders, Settings, Check, Zap, AlertCircle, ShieldCheck
 } from 'lucide-react';
 import { FileMetadata } from '../types';
 import { formatBytes, calculateOptimalChunkSize } from '../utils/fileHelper';
@@ -112,107 +112,6 @@ export default function SenderView() {
     }
     setQrError('');
 
-    // Draw Laser-Lock Target Selection Feedback Overlay if active
-    if (isLaserLockActiveRef.current) {
-      ctx.save();
-      
-      const time = performance.now();
-      
-      // Outer Target Border Box (neon red/violet glowing borders)
-      ctx.strokeStyle = '#ef4444'; // Red laser
-      ctx.lineWidth = 6;
-      
-      // Corner brackets
-      const margin = 20;
-      const bracketLen = 80;
-      const w = canvasSize;
-      const h = canvasSize;
-      
-      // Top Left corner
-      ctx.beginPath();
-      ctx.moveTo(margin + bracketLen, margin);
-      ctx.lineTo(margin, margin);
-      ctx.lineTo(margin, margin + bracketLen);
-      ctx.stroke();
-      
-      // Top Right corner
-      ctx.beginPath();
-      ctx.moveTo(w - margin - bracketLen, margin);
-      ctx.lineTo(w - margin, margin);
-      ctx.lineTo(w - margin, margin + bracketLen);
-      ctx.stroke();
-      
-      // Bottom Left corner
-      ctx.beginPath();
-      ctx.moveTo(margin + bracketLen, h - margin);
-      ctx.lineTo(margin, h - margin);
-      ctx.lineTo(margin, h - margin - bracketLen);
-      ctx.stroke();
-      
-      // Bottom Right corner
-      ctx.beginPath();
-      ctx.moveTo(w - margin - bracketLen, h - margin);
-      ctx.lineTo(w - margin, h - margin);
-      ctx.lineTo(w - margin, h - margin - bracketLen);
-      ctx.stroke();
-
-      // Center crosshair circles (concentric circles at the very center)
-      const cx = w / 2;
-      const cy = h / 2;
-      
-      ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 180, 0, Math.PI * 2);
-      ctx.stroke();
-      
-      ctx.strokeStyle = 'rgba(239, 68, 68, 0.75)';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 80, 0, Math.PI * 2);
-      ctx.stroke();
-      
-      // Center dot
-      ctx.fillStyle = '#ef4444';
-      ctx.beginPath();
-      ctx.arc(cx, cy, 8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Flashing crosshair guidelines (axis lines)
-      ctx.strokeStyle = 'rgba(239, 68, 68, 0.25)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      // Horizontal lines
-      ctx.moveTo(margin + 20, cy);
-      ctx.lineTo(cx - 90, cy);
-      ctx.moveTo(cx + 90, cy);
-      ctx.lineTo(w - margin - 20, cy);
-      // Vertical lines
-      ctx.moveTo(cx, margin + 20);
-      ctx.lineTo(cx, cy - 90);
-      ctx.moveTo(cx, cy + 90);
-      ctx.lineTo(cx, h - margin - 20);
-      ctx.stroke();
-
-      // Interactive laser sweeping bar (pulsing up/down)
-      const sweepY = margin + ((time / 6) % (h - 2 * margin));
-      ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.moveTo(margin, sweepY);
-      ctx.lineTo(w - margin, sweepY);
-      ctx.stroke();
-      
-      // Laser light beam fill gradient (subtle gradient below/above the laser sweep)
-      const grad = ctx.createLinearGradient(0, sweepY - 40, 0, sweepY + 40);
-      grad.addColorStop(0, 'rgba(239, 68, 68, 0)');
-      grad.addColorStop(0.5, 'rgba(239, 68, 68, 0.12)');
-      grad.addColorStop(1, 'rgba(239, 68, 68, 0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(margin, sweepY - 40, w - 2 * margin, 80);
-
-      ctx.restore();
-    }
   };
 
   // Initialize and manage the Web Worker life cycle
@@ -515,7 +414,19 @@ export default function SenderView() {
               )}
 
               {/* QR Canvas */}
-              <div className="bg-white p-2 sm:p-3 w-full max-w-full sm:max-w-[400px] md:max-w-[500px] rounded-lg shadow-2xl relative flex justify-center items-center">
+              <div className="bg-white p-2 sm:p-3 w-full max-w-full sm:max-w-[400px] md:max-w-[500px] rounded-lg shadow-2xl relative flex justify-center items-center group">
+                {/* Non-Destructive Outer Laser-Lock Target Selection Outer Frame */}
+                {isLaserLockActive && (
+                  <div className="absolute -inset-3 pointer-events-none z-20 rounded-xl border-2 border-red-500/80 shadow-[0_0_25px_rgba(239,68,68,0.35)] transition-all duration-300">
+                    {/* Glowing corner bracket elements */}
+                    <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-red-500 rounded-tl-sm"></div>
+                    <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-red-500 rounded-tr-sm"></div>
+                    <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-red-500 rounded-bl-sm"></div>
+                    <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-red-500 rounded-br-sm"></div>
+                    {/* Animated laser scanline sweeping outside canvas */}
+                    <div className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-red-500 to-transparent shadow-[0_0_12px_#ef4444] animate-[bounce_2s_infinite]"></div>
+                  </div>
+                )}
                 {totalChunksCount === 0 && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/80">
                     <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
@@ -849,19 +760,43 @@ export default function SenderView() {
                 <div className="p-3 bg-red-500/5 border border-red-500/20 rounded-lg text-[11px] space-y-1.5 leading-relaxed">
                   <div className="flex items-center justify-between text-red-600 font-bold">
                     <span>LASER-LOCK TARGETING ACTIVE</span>
-                    <span className="px-1.5 py-0.5 bg-red-600 text-white text-[8px] rounded uppercase animate-pulse">LOCKING</span>
+                    <span className="px-1.5 py-0.5 bg-red-600 text-white text-[8px] rounded uppercase animate-pulse">OUTER FRAME LOCK</span>
                   </div>
                   <p className="text-slate-600 font-sans">
-                    Projecting interactive corner tracking lines, center crosshairs, and optical alignment lasers for 100% reliable 240 FPS optical synchronization.
+                    Projecting non-destructive outer laser-lock guide brackets around the canvas border for camera alignment without obscuring QR modules.
                   </p>
                 </div>
               ) : (
                 <div className="p-3 border border-dashed border-slate-200 bg-slate-50/30 rounded-lg text-[11px] leading-relaxed text-slate-500 font-sans">
                   <p>
-                    Laser-Lock optical guidance is currently offline. Enable to project active alignment graphics.
+                    Laser-Lock optical guidance is currently offline. Enable to show outer alignment brackets around the QR canvas.
                   </p>
                 </div>
               )}
+            </div>
+
+            {/* Auto-Correction Status Card */}
+            <div className="border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Auto-Correction everywhere</h4>
+                </div>
+                <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 font-extrabold text-[9px] rounded border border-emerald-500/20">
+                  ECC LEVEL H (30%)
+                </span>
+              </div>
+              <div className="p-3 bg-emerald-50/40 border border-emerald-100 rounded-lg text-[11px] leading-relaxed space-y-1.5 font-sans">
+                <p className="text-slate-700 font-semibold">
+                  Reed-Solomon Optical Auto-Correction & Data Auto-Healing Active
+                </p>
+                <p className="text-slate-500 text-[10px]">
+                  • <strong className="text-slate-700">30% Matrix Damage Recovery:</strong> Reconstructs full frame payload even if camera glare, lens distortion, or partial screen blockage occurs.
+                </p>
+                <p className="text-slate-500 text-[10px]">
+                  • <strong className="text-slate-700">Automatic Parity Validation:</strong> Every frame carries high-density polynomial check bytes for instant on-the-fly checksum verification.
+                </p>
+              </div>
             </div>
 
             {/* Transmission Presets Configuration */}
