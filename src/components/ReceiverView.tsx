@@ -328,10 +328,10 @@ export default function ReceiverView() {
     try {
       let stream: MediaStream;
 
-      // Use safe, highly compatible, and performant HD constraints (1280x720 ideal)
+      // Use safe, highly compatible constraints without max to avoid OverconstrainedError
       const standardResolution = {
-        width: { ideal: 1280, max: 1920 },
-        height: { ideal: 720, max: 1080 }
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
       };
 
       if (selectedCameraId) {
@@ -1280,6 +1280,30 @@ export default function ReceiverView() {
                     {transferSpeed.toFixed(3)} MB/s
                   </span>
                 </div>
+              </div>
+            </div>
+
+            {/* Auto-Correction Status Card */}
+            <div className="w-full border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Auto-Correction everywhere</h4>
+                </div>
+                <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 font-extrabold text-[9px] rounded border border-emerald-500/20">
+                  ECC LEVEL H (30%)
+                </span>
+              </div>
+              <div className="p-3 bg-emerald-50/40 border border-emerald-100 rounded-lg text-[11px] leading-relaxed space-y-1.5 font-sans">
+                <p className="text-slate-700 font-semibold">
+                  Reed-Solomon Optical Auto-Correction & Data Auto-Healing Active
+                </p>
+                <p className="text-slate-500 text-[10px]">
+                  • <strong className="text-slate-700">30% Matrix Damage Recovery:</strong> Reconstructs full frame payload even if camera glare, lens distortion, or partial screen blockage occurs.
+                </p>
+                <p className="text-slate-500 text-[10px]">
+                  • <strong className="text-slate-700">Automatic Parity Validation:</strong> Every frame carries high-density polynomial check bytes for instant on-the-fly checksum verification.
+                </p>
               </div>
             </div>
           </div>
