@@ -836,9 +836,9 @@ export default function ReceiverView() {
   const renderChunksGrid = () => {
     if (!metadata) {
       return (
-        <div className="flex flex-col items-center justify-center p-4 sm:p-8 border border-slate-200 bg-white/20 rounded-xl">
+        <div className="flex flex-col items-center justify-center p-8 bg-slate-50 border border-slate-100 rounded-2xl">
           <Activity className="w-8 h-8 text-slate-400 animate-pulse mb-3" />
-          <p className="text-slate-500 text-xs">Awaiting metadata chunk (Index 0) to compute stream geometry...</p>
+          <p className="text-slate-500 text-sm font-medium">Awaiting metadata chunk (Index 0) to compute stream geometry...</p>
         </div>
       );
     }
@@ -848,17 +848,17 @@ export default function ReceiverView() {
 
     for (let i = 0; i <= totalCount; i++) {
       const isCaptured = capturedChunks[i] !== undefined;
-      let badgeColor = 'bg-slate-50/50 border-slate-200 text-slate-400';
+      let badgeColor = 'bg-white border-slate-200 text-slate-400 shadow-sm';
       if (isCaptured) {
         badgeColor = i === 0 
-          ? 'bg-amber-500/20 border-amber-500/30 text-amber-400' 
-          : 'bg-indigo-600/20 border-indigo-600/30 text-indigo-500 font-extrabold';
+          ? 'bg-amber-100 border-amber-200 text-amber-700 font-bold' 
+          : 'bg-indigo-50 border-indigo-200 text-indigo-600 font-bold';
       }
 
       grid.push(
         <div
           key={i}
-          className={`aspect-square flex items-center justify-center text-[10px] font-mono border rounded transition-all select-none ${badgeColor}`}
+          className={`aspect-square flex items-center justify-center text-[10px] font-sans border rounded-lg transition-all select-none ${badgeColor}`}
           title={i === 0 ? `Metadata Chunk` : `Data Chunk ${i}`}
         >
           {i}
@@ -867,14 +867,14 @@ export default function ReceiverView() {
     }
 
     return (
-      <div className="space-y-3">
-        <div className="flex justify-between items-center">
-          <span className="text-slate-500 text-[11px] uppercase tracking-wider font-bold">Geometry Data Map</span>
-          <span className="text-[10px] text-slate-500">
-            {Object.keys(capturedChunks).length} / {totalCount + 1} BLOCK SECTORS
+      <div className="space-y-4">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+          <span className="text-slate-800 text-sm uppercase tracking-wide font-bold">Geometry Data Map</span>
+          <span className="text-xs font-bold text-slate-500">
+            <span className="text-indigo-600">{Object.keys(capturedChunks).length}</span> / {totalCount + 1} BLOCK SECTORS
           </span>
         </div>
-        <div className="grid grid-cols-6 sm:grid-cols-10 md:grid-cols-12 gap-1.5 max-h-[160px] overflow-y-auto p-2 border border-slate-200 bg-white/60 rounded-xl scrollbar-thin">
+        <div className="grid grid-cols-6 sm:grid-cols-10 md:grid-cols-12 gap-2 max-h-[180px] overflow-y-auto p-3 border border-slate-100 bg-slate-50/50 rounded-2xl scrollbar-thin">
           {grid}
         </div>
       </div>
@@ -889,21 +889,28 @@ export default function ReceiverView() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-6 px-4 animate-fade-in font-mono">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
+    <div className="max-w-7xl mx-auto py-8 px-6 sm:px-12 animate-fade-in font-sans space-y-8">
+      <div className="text-center mb-4">
+        <h2 className="text-4xl font-display font-bold text-slate-900 tracking-tight mb-3">Receiver Scanner</h2>
+        <p className="text-slate-500">
+          Point your camera at a transmitting screen to capture and assemble the optical sequence.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
         {/* Left Column: Viewfinder camera feed */}
-        <div className="lg:col-span-6 flex flex-col gap-4">
-          <div className="w-full border border-slate-200 bg-white rounded-2xl p-4 sm:p-5 relative overflow-hidden flex flex-col items-center">
+        <div className="lg:col-span-6 flex flex-col gap-6">
+          <div className="w-full border border-slate-200 bg-white rounded-[2rem] p-6 sm:p-8 relative overflow-hidden flex flex-col items-center shadow-sm">
             {/* Hidden Canvas used for frame processing */}
             <canvas ref={canvasRef} className="hidden" />
 
             {/* Video Feed */}
-            <div className="relative w-full max-w-md aspect-[4/3] sm:aspect-video lg:aspect-[4/3] bg-slate-50 border border-slate-200 rounded-xl overflow-hidden flex items-center justify-center mx-auto shadow-inner">
+            <div className="relative w-full max-w-md aspect-[4/3] sm:aspect-video lg:aspect-[4/3] bg-slate-900 border-[8px] border-slate-900 rounded-[2rem] overflow-hidden flex items-center justify-center mx-auto shadow-2xl shadow-indigo-900/10">
               {/* Viewfinder Target Reticle - strictly inside the viewfinder to prevent overlapping layout anomalies */}
-              <div className="absolute top-4 left-4 w-6 h-6 border-t-2 border-l-2 border-indigo-600 z-10 animate-pulse"></div>
-              <div className="absolute top-4 right-4 w-6 h-6 border-t-2 border-r-2 border-indigo-600 z-10 animate-pulse"></div>
-              <div className="absolute bottom-4 left-4 w-6 h-6 border-b-2 border-l-2 border-indigo-600 z-10 animate-pulse"></div>
-              <div className="absolute bottom-4 right-4 w-6 h-6 border-b-2 border-r-2 border-indigo-600 z-10 animate-pulse"></div>
+              <div className="absolute top-4 left-4 w-8 h-8 border-t-4 border-l-4 rounded-tl-xl border-indigo-500 z-10 animate-pulse opacity-50"></div>
+              <div className="absolute top-4 right-4 w-8 h-8 border-t-4 border-r-4 rounded-tr-xl border-indigo-500 z-10 animate-pulse opacity-50"></div>
+              <div className="absolute bottom-4 left-4 w-8 h-8 border-b-4 border-l-4 rounded-bl-xl border-indigo-500 z-10 animate-pulse opacity-50"></div>
+              <div className="absolute bottom-4 right-4 w-8 h-8 border-b-4 border-r-4 rounded-br-xl border-indigo-500 z-10 animate-pulse opacity-50"></div>
 
               <video
                 ref={videoRef}
@@ -913,27 +920,27 @@ export default function ReceiverView() {
               />
 
               {!isScanning && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-slate-50">
-                  <Camera className="w-12 h-12 text-indigo-500/80 mb-3 animate-pulse" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-slate-900">
+                  <Camera className="w-16 h-16 text-indigo-400 mb-4 animate-pulse opacity-50" />
                   {cameras.length === 0 ? (
                     <>
-                      <p className="text-slate-700 font-bold text-xs uppercase tracking-wide">Camera Permission Required</p>
-                      <p className="text-[10px] text-slate-500 mt-1 max-w-xs mb-3">
-                        The secure optical receiver sandbox needs permission to access your device camera.
+                      <p className="text-white font-display font-bold text-lg mb-1 tracking-wide">Hardware Access Required</p>
+                      <p className="text-sm text-slate-400 max-w-xs mb-6">
+                        Secure optical receiver needs permission to access your device camera.
                       </p>
                       <button
                         type="button"
                         onClick={forceRequestPermission}
-                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-[10px] uppercase tracking-wider py-1.5 px-3 rounded shadow-sm cursor-pointer transition-all hover:scale-105"
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm tracking-wider py-3 px-6 rounded-xl shadow-lg cursor-pointer transition-all hover:scale-105"
                       >
-                        Grant Camera Permission
+                        Grant Permissions
                       </button>
                     </>
                   ) : (
                     <>
-                      <p className="text-slate-500 font-bold text-xs uppercase tracking-wide">Awaiting Scanner Activation</p>
-                      <p className="text-[10px] text-slate-500 mt-1 max-w-xs">
-                        Press "ACTIVATE SCANNER" to initialize secure sandbox webcam capture loop.
+                      <p className="text-white font-display font-bold text-lg mb-1 tracking-wide">Awaiting Scanner Activation</p>
+                      <p className="text-sm text-slate-400 max-w-xs">
+                        Press Activate Scanner to initialize the secure sandbox capture loop.
                       </p>
                     </>
                   )}
@@ -1106,41 +1113,42 @@ export default function ReceiverView() {
             </div>
 
              {/* Camera Controls Footer */}
-            <div className="w-full mt-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <Video className="w-4 h-4 text-slate-500" />
-                <select
-                  value={selectedCameraId}
-                  onChange={(e) => setSelectedCameraId(e.target.value)}
-                  className="flex-1 bg-slate-50 border border-slate-200 text-slate-700 rounded px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-600 tracking-wide font-mono select-none"
-                  disabled={cameras.length === 0}
-                >
-                  {cameras.length > 0 ? (
-                    cameras.map((cam) => (
-                      <option key={cam.deviceId} value={cam.deviceId}>
-                        {cam.label || `CAMERA ${cam.deviceId.substring(0, 5)}`}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="">AWAITING HARDWARE GRANTS...</option>
-                  )}
-                </select>
+            <div className="w-full mt-6 space-y-4">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <div className="flex items-center gap-3 flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 hover:border-indigo-200 transition-colors">
+                  <Video className="w-5 h-5 text-indigo-500" />
+                  <select
+                    value={selectedCameraId}
+                    onChange={(e) => setSelectedCameraId(e.target.value)}
+                    className="flex-1 bg-transparent text-slate-700 text-sm focus:outline-none font-semibold truncate appearance-none"
+                    disabled={cameras.length === 0}
+                  >
+                    {cameras.length > 0 ? (
+                      cameras.map((cam) => (
+                        <option key={cam.deviceId} value={cam.deviceId}>
+                          {cam.label || `Camera Device ${cam.deviceId.substring(0, 5)}`}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">Awaiting hardware permissions...</option>
+                    )}
+                  </select>
+                </div>
                 <button
                   type="button"
                   onClick={forceRequestPermission}
-                  className="p-1.5 border border-slate-200 hover:border-indigo-500/30 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 rounded cursor-pointer transition-all"
-                  title="Force Ask Camera Permissions"
+                  className="px-4 py-2 border-2 border-slate-200 hover:border-indigo-200 bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 font-bold text-sm shadow-sm"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
+                  <RefreshCw className="w-4 h-4" /> Reset Hardware
                 </button>
               </div>
 
               {/* Camera Resolution & Density Tuning Selector */}
-              <div className="border-t border-slate-100 pt-2.5 space-y-1.5">
-                <div className="flex justify-between items-center px-0.5">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1.5">
-                    <Sliders className="w-3.5 h-3.5 text-indigo-500" />
-                    Density Resolution Tuning
+              <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-sm space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-slate-500 font-bold uppercase tracking-wider flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-indigo-500" />
+                    Optics Tuning
                   </span>
                   <span className="text-[9px] px-1.5 py-0.5 bg-indigo-600/10 text-indigo-500 rounded font-extrabold uppercase">
                     {scanResolutionMode === 'auto' ? 'Dynamic Auto' : scanResolutionMode === 'high-res' ? 'Ultra-Res (1080p)' : 'High-Speed (600p)'}
@@ -1243,48 +1251,50 @@ export default function ReceiverView() {
                 </div>
               )}
 
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <button
                   onClick={handleToggleScanning}
-                  className={`flex-1 py-3 px-4 rounded font-bold tracking-wider text-xs cursor-pointer transition-all flex items-center justify-center gap-2 ${
+                  className={`flex-1 py-4 px-6 rounded-2xl font-display font-bold tracking-wide text-base cursor-pointer transition-all flex items-center justify-center gap-3 shadow-sm hover:-translate-y-1 hover:shadow-md border ${
                     isScanning
-                      ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40'
-                      : 'bg-indigo-600 text-white hover:bg-indigo-500 border border-indigo-600 font-extrabold'
+                      ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300'
+                      : 'bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-700'
                   }`}
                 >
                   {isScanning ? (
                     <>
-                      <Pause className="w-4 h-4 fill-amber-400 text-amber-400" /> DEACTIVATE SCANNER
+                      <Pause className="w-5 h-5 fill-amber-900" /> Deactivate Scanner
                     </>
                   ) : (
                     <>
-                      <Play className="w-4 h-4 fill-white text-white" /> ACTIVATE SCANNER
+                      <Play className="w-5 h-5 fill-white" /> Activate Scanner
                     </>
                   )}
                 </button>
                 <button
                   onClick={handleReset}
-                  className="px-3 border border-slate-200 hover:border-red-500/30 bg-slate-50 text-slate-500 hover:text-red-400 rounded cursor-pointer transition-all"
+                  className="px-6 border-2 border-slate-200 hover:border-red-200 bg-white hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-2xl cursor-pointer transition-all shadow-sm flex items-center justify-center"
                   title="Wipe Session Data"
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  <RefreshCw className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
             {/* Live Stats Diagnostics */}
-            <div className="w-full border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-indigo-500" />
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Live Diagnostics</h4>
+            <div className="w-full border border-slate-200 bg-white p-6 rounded-[2rem] space-y-6 shadow-sm">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+                    <Activity className="w-5 h-5" />
+                  </div>
+                  <h4 className="text-lg font-display font-bold text-slate-900 tracking-tight">Live Diagnostics</h4>
                 </div>
-                <div className="px-2 py-1 bg-slate-50 rounded border border-slate-200 flex items-center gap-1.5">
-                  <span className="relative flex h-2 w-2">
+                <div className="px-3 py-1.5 bg-indigo-50 rounded-full border border-indigo-100 flex items-center gap-2">
+                  <span className="relative flex h-2.5 w-2.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-500 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-600"></span>
                   </span>
-                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest text-indigo-500">
+                  <span className="text-xs text-indigo-700 font-bold uppercase tracking-wider">
                     {transferSpeed.toFixed(3)} MB/s
                   </span>
                 </div>
@@ -1292,44 +1302,48 @@ export default function ReceiverView() {
             </div>
 
             {/* Auto-Correction Status Card */}
-            <div className="w-full border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Auto-Correction everywhere</h4>
+            <div className="w-full border border-slate-200 bg-white p-6 rounded-[2rem] space-y-4 shadow-sm">
+              <div className="flex items-center justify-between pb-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-500">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Auto-Correction Active</h4>
                 </div>
-                <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 font-extrabold text-[9px] rounded border border-emerald-500/20">
-                  ECC LEVEL H (30%)
+                <span className="px-3 py-1 bg-emerald-50 text-emerald-600 font-bold text-xs rounded-full border border-emerald-100">
+                  ECC L-H (30%)
                 </span>
               </div>
-              <div className="p-3 bg-emerald-50/40 border border-emerald-100 rounded-lg text-[11px] leading-relaxed space-y-1.5 font-sans">
-                <p className="text-slate-700 font-semibold">
+              <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-xs leading-relaxed space-y-2">
+                <p className="text-slate-700 font-semibold mb-2">
                   Reed-Solomon Optical Auto-Correction & Data Auto-Healing Active
                 </p>
-                <p className="text-slate-500 text-[10px]">
-                  • <strong className="text-slate-700">30% Matrix Damage Recovery:</strong> Reconstructs full frame payload even if camera glare, lens distortion, or partial screen blockage occurs.
-                </p>
-                <p className="text-slate-500 text-[10px]">
-                  • <strong className="text-slate-700">Automatic Parity Validation:</strong> Every frame carries high-density polynomial check bytes for instant on-the-fly checksum verification.
-                </p>
+                <div className="flex gap-2 text-slate-600">
+                  <span className="text-indigo-500 mt-0.5">•</span>
+                  <span><strong className="text-slate-800">30% Matrix Damage Recovery:</strong> Reconstructs full frame payload even if camera glare, lens distortion, or partial screen blockage occurs.</span>
+                </div>
+                <div className="flex gap-2 text-slate-600">
+                  <span className="text-indigo-500 mt-0.5">•</span>
+                  <span><strong className="text-slate-800">Automatic Parity Validation:</strong> Every frame carries high-density polynomial check bytes for instant on-the-fly checksum verification.</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Right Column: Real-time Stats & Chunk Map */}
-        <div className="lg:col-span-6 space-y-4">
+        <div className="lg:col-span-6 space-y-6">
           {/* Metadata Card */}
-          <div className="border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-4">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Optical Payload Profile</h3>
+          <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-[2rem] space-y-6 shadow-sm">
+            <div className="flex justify-between items-center pb-4 border-b border-slate-100">
+              <h3 className="text-lg font-display font-bold text-slate-900 tracking-tight">Optical Payload Profile</h3>
               <div className="flex items-center gap-2">
-                <span className={`px-2 py-0.5 rounded text-[9px] uppercase tracking-widest ${
+                <span className={`px-4 py-1.5 rounded-full text-xs uppercase font-bold tracking-widest ${
                   isVerifying
-                    ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                    ? 'bg-amber-100 text-amber-700 border border-amber-200'
                     : metadata 
-                      ? 'bg-indigo-600/10 text-indigo-500 border border-indigo-600/20' 
-                      : 'bg-slate-50 text-slate-500 border border-slate-200'
+                      ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' 
+                      : 'bg-slate-100 text-slate-500 border border-slate-200'
                 }`}>
                   {isVerifying ? 'VERIFYING CRC' : metadata ? 'HEADER RECEIVED' : 'LISTENING...'}
                 </span>
@@ -1337,44 +1351,44 @@ export default function ReceiverView() {
             </div>
 
             {metadata ? (
-              <div className="space-y-3">
-                <div className="text-xs">
-                  <span className="text-slate-500 uppercase tracking-wide block text-[10px]">RECONSTRUCTED FILENAME</span>
-                  <span className="font-extrabold text-slate-900 break-all">{metadata.name}</span>
+              <div className="space-y-6">
+                <div>
+                  <span className="text-slate-400 font-semibold uppercase tracking-wider block text-xs mb-1">Reconstructed Filename</span>
+                  <span className="text-2xl font-display font-bold text-slate-900 break-all">{metadata.name}</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="text-slate-500 uppercase tracking-wide block text-[10px]">COMPUTED SIZE</span>
-                    <span className="font-bold text-slate-700">{formatBytes(metadata.size)}</span>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <span className="text-slate-400 font-semibold uppercase tracking-wider block text-[10px] mb-1">Computed Size</span>
+                    <span className="text-xl font-display font-bold text-slate-800">{formatBytes(metadata.size)}</span>
                   </div>
-                  <div>
-                    <span className="text-slate-500 uppercase tracking-wide block text-[10px]">MIME CLASS</span>
-                    <span className="font-bold text-slate-700 uppercase truncate block">{metadata.type}</span>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 overflow-hidden">
+                    <span className="text-slate-400 font-semibold uppercase tracking-wider block text-[10px] mb-1">MIME Class</span>
+                    <span className="text-lg font-display font-bold text-slate-800 uppercase truncate block">{metadata.type || 'RAW/BIN'}</span>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="text-center py-4">
-                <p className="text-xs text-slate-500 font-mono">
+              <div className="text-center py-8 bg-slate-50 rounded-xl border border-slate-100">
+                <p className="text-sm text-slate-500 font-medium max-w-sm mx-auto">
                   Point camera at the animated sequence grid to auto-detect header metadata.
                 </p>
               </div>
             )}
 
             {/* Total progress bar */}
-            <div className="space-y-2 pt-1">
-              <div className="flex justify-between text-[11px] font-bold">
-                <span className="text-slate-500 uppercase tracking-wider">{isVerifying ? (verificationStatus || 'HASH SUM CALCULATION') : 'PACKET HARVEST DENSITY'}</span>
-                <span className={isVerifying ? 'text-amber-500 animate-pulse' : 'text-indigo-500'}>
+            <div className="space-y-3 pt-4 border-t border-slate-100">
+              <div className="flex justify-between text-xs font-bold">
+                <span className="text-slate-400 uppercase tracking-wider">{isVerifying ? (verificationStatus || 'HASH SUM CALCULATION') : 'PACKET HARVEST DENSITY'}</span>
+                <span className={isVerifying ? 'text-amber-500 animate-pulse text-lg font-display font-bold' : 'text-indigo-600 text-lg font-display font-bold'}>
                   {isVerifying ? `${verificationProgress}%` : `${getPercentage()}%`}
                 </span>
               </div>
-              <div className="w-full bg-slate-50 h-2.5 rounded-full overflow-hidden border border-slate-200">
+              <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden border border-slate-200">
                 <div
                   className={`h-full transition-all duration-300 ${
                     isVerifying 
-                      ? 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]' 
-                      : 'bg-indigo-600 shadow-[0_0_10px_rgba(16,185,129,0.4)]'
+                      ? 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.5)]' 
+                      : 'bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.5)]'
                   }`}
                   style={{ width: isVerifying ? `${verificationProgress}%` : `${getPercentage()}%` }}
                 ></div>
@@ -1384,42 +1398,42 @@ export default function ReceiverView() {
 
           {/* Saved Sessions Backlog */}
           {!metadata && savedSessions.length > 0 && (
-            <div className="border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-3">
-              <div className="flex justify-between items-center pb-1 border-b border-slate-200">
-                <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Incomplete Transfers / Backlogs</span>
-                <span className="text-[9px] text-amber-500 font-extrabold animate-pulse">RESUMABLE</span>
+            <div className="border border-slate-200 bg-white p-6 rounded-[2rem] space-y-4 shadow-sm">
+              <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                <span className="text-sm font-bold text-slate-800 uppercase tracking-wide">Incomplete Transfers / Backlogs</span>
+                <span className="text-[10px] px-2 py-1 bg-amber-50 text-amber-600 rounded font-extrabold animate-pulse uppercase tracking-widest">Resumable</span>
               </div>
-              <div className="space-y-2.5 max-h-[220px] overflow-y-auto scrollbar-thin pr-1">
+              <div className="space-y-4 max-h-[260px] overflow-y-auto scrollbar-thin pr-2">
                 {savedSessions.map((sess) => {
                   const total = sess.metadata.chunkCount + 1;
                   const completed = sess.completedIndices.length;
                   const pct = Math.round((completed / total) * 100);
                   return (
-                    <div key={sess.sessionId} className="p-3 border border-slate-200 bg-slate-50/20 rounded-lg space-y-2 text-xs">
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="space-y-0.5 min-w-0">
-                          <span className="font-bold text-slate-700 block truncate" title={sess.metadata.name}>{sess.metadata.name}</span>
-                          <span className="text-[10px] text-slate-500 block">{formatBytes(sess.metadata.size)} • {sess.metadata.type}</span>
+                    <div key={sess.sessionId} className="p-4 border border-slate-100 bg-slate-50/50 hover:bg-slate-50 rounded-2xl space-y-3 transition-colors">
+                      <div className="flex justify-between items-start gap-3">
+                        <div className="space-y-1 min-w-0">
+                          <span className="font-bold text-slate-800 block truncate text-sm" title={sess.metadata.name}>{sess.metadata.name}</span>
+                          <span className="text-xs text-slate-500 font-medium block">{formatBytes(sess.metadata.size)} • <span className="uppercase">{sess.metadata.type}</span></span>
                         </div>
-                        <span className="text-indigo-500 font-bold shrink-0 font-mono">{pct}%</span>
+                        <span className="text-indigo-600 font-display font-bold text-lg shrink-0">{pct}%</span>
                       </div>
-                      <div className="w-full bg-white h-1.5 rounded-full overflow-hidden border border-slate-200">
-                        <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${pct}%` }}></div>
+                      <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                        <div className="bg-indigo-500 h-full transition-all duration-300" style={{ width: `${pct}%` }}></div>
                       </div>
-                      <div className="flex justify-between items-center text-[10px] pt-1">
-                        <span className="text-slate-500">{completed} / {total} sectors</span>
+                      <div className="flex justify-between items-center text-xs pt-2">
+                        <span className="text-slate-500 font-medium">{completed} / {total} sectors</span>
                         <div className="flex gap-2">
                           <button
                             type="button"
                             onClick={() => handleResumeSession(sess)}
-                            className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded text-[9px] uppercase cursor-pointer transition-all"
+                            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-[10px] uppercase cursor-pointer transition-all shadow-sm"
                           >
                             Resume
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDeleteSession(sess.sessionId, sess.metadata.name)}
-                            className="px-2 py-1 border border-slate-200 hover:border-red-500/30 text-slate-500 hover:text-red-400 font-bold rounded text-[9px] uppercase cursor-pointer transition-all"
+                            className="px-4 py-1.5 border-2 border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-600 hover:text-red-600 font-bold rounded-lg text-[10px] uppercase cursor-pointer transition-all"
                           >
                             Delete
                           </button>
@@ -1433,34 +1447,34 @@ export default function ReceiverView() {
           )}
 
           {/* Assembly grid */}
-          <div className="border border-slate-200 bg-white p-4 sm:p-5 rounded-xl">
+          <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-[2rem] shadow-sm">
             {renderChunksGrid()}
           </div>
 
           {/* Real-time Logger Terminal */}
-          <div className="border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-3">
-            <div className="flex justify-between items-center pb-1 border-b border-slate-200">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Security Sandbox Activity Logs</span>
-              <span className="text-[9px] text-slate-400">LIVESTREAM DATA</span>
+          <div className="border border-slate-200 bg-white p-6 rounded-[2rem] space-y-4 shadow-sm">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+              <span className="text-sm font-bold text-slate-700 uppercase tracking-wide">Security Sandbox Logs</span>
+              <span className="text-[10px] px-2 py-1 bg-slate-100 rounded text-slate-500 font-bold uppercase tracking-widest">LIVESTREAM</span>
             </div>
 
-            <div className="max-h-[140px] overflow-y-auto space-y-1.5 font-mono text-[10px] bg-white/80 p-3 rounded-lg border border-slate-200/60 leading-relaxed scrollbar-thin">
+            <div className="max-h-[140px] overflow-y-auto space-y-2 font-mono text-[11px] bg-slate-50 p-4 rounded-xl border border-slate-100 leading-relaxed scrollbar-thin">
               {logs.length > 0 ? (
                 logs.map((log) => (
-                  <div key={log.id} className="flex gap-2 items-start text-slate-500 select-text">
+                  <div key={log.id} className="flex gap-2 items-start text-slate-600 select-text">
                     <span className="text-slate-400 select-none font-semibold shrink-0">[{log.timestamp}]</span>
-                    <span className={`shrink-0 select-none ${
-                      log.type === 'success' ? 'text-indigo-500' :
-                      log.type === 'warning' ? 'text-amber-400' :
-                      log.type === 'error' ? 'text-red-400' : 'text-cyan-400'
+                    <span className={`shrink-0 select-none font-bold ${
+                      log.type === 'success' ? 'text-indigo-600' :
+                      log.type === 'warning' ? 'text-amber-500' :
+                      log.type === 'error' ? 'text-red-500' : 'text-emerald-500'
                     }`}>
                       {log.type.toUpperCase()}:
                     </span>
-                    <span className="text-slate-700">{log.message}</span>
+                    <span className="text-slate-800">{log.message}</span>
                   </div>
                 ))
               ) : (
-                <div className="text-slate-400 text-center py-4">
+                <div className="text-slate-400 text-center py-4 italic">
                   Warming diagnostic link logs...
                 </div>
               )}
