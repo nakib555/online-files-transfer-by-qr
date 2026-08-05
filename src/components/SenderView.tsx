@@ -6,13 +6,15 @@
 import React, { useState, useRef, useEffect, DragEvent } from 'react';
 import { 
   Upload, Play, Pause, SkipForward, SkipBack, RefreshCw, 
-  FileText, Sliders, Settings, Check, Zap, AlertCircle, ShieldCheck
+  FileText, Sliders, Settings, Check, Zap, AlertCircle, ShieldCheck, FileArchive
 } from 'lucide-react';
 import { FileMetadata } from '../types';
 import { formatBytes, calculateOptimalChunkSize } from '../utils/fileHelper';
+import * as fflate from 'fflate';
 
 export default function SenderView() {
   const [file, setFile] = useState<File | null>(null);
+  const [batchCount, setBatchCount] = useState<number>(0);
   const [totalChunksCount, setTotalChunksCount] = useState<number>(0);
   const [computedCrc32, setComputedCrc32] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -265,8 +267,49 @@ export default function SenderView() {
     });
   }, [currentIndex, file, totalChunksCount, computedCrc32, chunkSize, isProcessing, isLaserLockActive]);
 
-  const handleFileChange = async (selectedFile: File) => {
-    setFile(selectedFile);
+  const handleFileChange = async (files: FileList | File[]) => {
+    if (!files || files.length === 0) return;
+    
+    if (files.length === 1) {
+      setBatchCount(0);
+      setFile(files[0]);
+    } else {
+      setIsProcessing(true);
+      setProcessingStatus('Assembling Batch Queue...');
+      setProcessingProgress(0);
+      
+      const zipData: Record<string, Uint8Array> = {};
+      
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        setProcessingStatus(`Zipping ${f.name} (${i + 1}/${files.length})`);
+        setProcessingProgress(Math.round((i / files.length) * 50));
+        const arrayBuffer = await f.arrayBuffer();
+        zipData[f.name] = new Uint8Array(arrayBuffer);
+      }
+      
+      setProcessingStatus('Compressing batch...');
+      
+      // We use async fflate zip to avoid blocking the main thread
+      fflate.zip(zipData, { level: 0 }, (err, data) => {
+        if (err) {
+          console.error(err);
+          setIsProcessing(false);
+          return;
+        }
+        
+        const blob = new Blob([data], { type: 'application/zip' });
+        const batchFile = new File([blob], `batch_transfer_${files.length}_files.zip`, {
+          type: 'application/zip',
+          lastModified: Date.now(),
+        });
+        
+        setBatchCount(files.length);
+        setFile(batchFile);
+        setIsProcessing(false);
+      });
+      return; // Return early because handleReset is handled when file changes, but wait, file change effect does re-chunking
+    }
     handleReset();
   };
 
@@ -283,7 +326,7 @@ export default function SenderView() {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFileChange(e.dataTransfer.files[0]);
+      handleFileChange(e.dataTransfer.files);
     }
   };
 
@@ -374,10 +417,11 @@ export default function SenderView() {
               SELECT_FILE
               <input
                 type="file"
+                multiple
                 className="hidden"
                 onChange={(e) => {
                   if (e.target.files && e.target.files.length > 0) {
-                    handleFileChange(e.target.files[0]);
+                    handleFileChange(e.target.files);
                   }
                 }}
               />
@@ -577,10 +621,12 @@ export default function SenderView() {
             <div className="border border-slate-200 bg-white p-4 sm:p-5 rounded-xl space-y-4">
               <div className="flex items-start gap-3">
                 <div className="p-2.5 bg-slate-50 border border-slate-200 rounded text-indigo-500">
-                  <FileText className="w-5 h-5" />
+                  {batchCount > 0 ? <FileArchive className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
                 </div>
                 <div className="overflow-hidden flex-1">
-                  <h3 className="text-sm font-bold text-slate-900 truncate">{file.name}</h3>
+                  <h3 className="text-sm font-bold text-slate-900 truncate">
+                    {batchCount > 0 ? `Batch Transfer (${batchCount} Files)` : file.name}
+                  </h3>
                   <p className="text-xs text-slate-500 font-mono mt-0.5 uppercase tracking-wider">{file.type || 'UNKNOWN/RAW'}</p>
                 </div>
               </div>

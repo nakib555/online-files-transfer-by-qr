@@ -13,7 +13,7 @@ import {
   parseChunk, parseMetadata, formatBytes, CRC32,
   saveChunkToDB, getChunkFromDB, clearSession, downloadFileFromDB 
 } from '../utils/fileHelper';
-import jsQR from 'jsqr';
+import QrScanner from 'qr-scanner';
 
 export default function ReceiverView() {
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
@@ -188,87 +188,25 @@ export default function ReceiverView() {
     };
   }, []);
 
-  // Initialize and manage the high-speed Web Worker pool lifecycle
+  const qrEngineRef = useRef<any>(null);
+  const isDecodingRef = useRef<boolean>(false);
+
+  // Initialize QrScanner Engine
   useEffect(() => {
-    const workers: Worker[] = [];
-    const activeStates: boolean[] = [false, false];
-
-    for (let i = 0; i < 2; i++) {
-      try {
-        const w = new Worker(
-          new URL('../utils/qr-reader.worker.ts', import.meta.url),
-          { type: 'module' }
-        );
-
-        w.onmessage = (e) => {
-          const { type, result, location, width, height, error } = e.data;
-          
-          // Mark worker i as available again
-          activeStates[i] = false;
-
-          if (type === 'SCAN_RESULT' && result) {
-            handleScannedCode(result);
-
-            if (location && videoRef.current) {
-              const videoEl = videoRef.current;
-              const containerWidth = videoEl.clientWidth;
-              const containerHeight = videoEl.clientHeight;
-              const videoWidth = videoEl.videoWidth;
-              const videoHeight = videoEl.videoHeight;
-
-              if (containerWidth && containerHeight && videoWidth && videoHeight) {
-                const videoRatio = videoWidth / videoHeight;
-                const containerRatio = containerWidth / containerHeight;
-
-                let renderedWidth = containerWidth;
-                let renderedHeight = containerHeight;
-                let xOffset = 0;
-                let yOffset = 0;
-
-                if (containerRatio > videoRatio) {
-                  renderedWidth = containerWidth;
-                  renderedHeight = containerWidth / videoRatio;
-                  yOffset = (containerHeight - renderedHeight) / 2;
-                } else {
-                  renderedHeight = containerHeight;
-                  renderedWidth = containerHeight * videoRatio;
-                  xOffset = (containerWidth - renderedWidth) / 2;
-                }
-
-                const transformPoint = (p: { x: number; y: number }) => {
-                  const normX = p.x / width;
-                  const normY = p.y / height;
-                  return {
-                    x: xOffset + normX * renderedWidth,
-                    y: yOffset + normY * renderedHeight,
-                  };
-                };
-
-                const targetLocation = {
-                  topLeft: transformPoint(location.topLeftCorner),
-                  topRight: transformPoint(location.topRightCorner),
-                  bottomRight: transformPoint(location.bottomRightCorner),
-                  bottomLeft: transformPoint(location.bottomLeftCorner),
-                };
-
-                targetLocationRef.current = targetLocation;
-                lastDetectedTimeRef.current = Date.now();
-              }
-            }
-          }
-        };
-
-        workers.push(w);
-      } catch (err) {
-        console.error('Failed to create QR scanning worker:', err);
-      }
-    }
-
-    scanWorkersRef.current = workers;
-    workerActiveRef.current = activeStates;
+    let engine: any = null;
+    QrScanner.createQrEngine().then(e => {
+      engine = e;
+      qrEngineRef.current = engine;
+    }).catch(err => {
+      console.error('Failed to initialize QrScanner engine:', err);
+    });
 
     return () => {
-      workers.forEach(w => w.terminate());
+      if (engine && typeof engine.terminate === 'function') {
+        engine.terminate();
+      } else if (engine && typeof engine.postMessage === 'function') {
+        engine.postMessage({ type: 'close' });
+      }
     };
   }, []);
 
@@ -471,35 +409,105 @@ export default function ReceiverView() {
       // Draw the video frame downscaled
       ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
 
-      // Submit to an available worker in the pool
-      const workers = scanWorkersRef.current;
-      const activeStates = workerActiveRef.current;
-      if (workers.length > 0) {
-        // Find a free worker
-        let freeWorkerIdx = -1;
-        for (let i = 0; i < workers.length; i++) {
-          const idx = (nextWorkerIdxRef.current + i) % workers.length;
-          if (!activeStates[idx]) {
-            freeWorkerIdx = idx;
-            break;
+      // Run QrScanner decoding if not already decoding
+      if (qrEngineRef.current && !isDecodingRef.current) {
+        isDecodingRef.current = true;
+        
+        // --- Faint Scan Health Heatmap Overlay ---
+        const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+        const gridCols = 20;
+        const gridRows = 20;
+        const cellW = targetWidth / gridCols;
+        const cellH = targetHeight / gridRows;
+        const data = imageData.data;
+        
+        ctx.save();
+        for (let y = 0; y < gridRows; y++) {
+          for (let x = 0; x < gridCols; x++) {
+            let minLum = 255;
+            let maxLum = 0;
+            
+            const sampleStepX = Math.max(1, Math.floor(cellW / 4));
+            const sampleStepY = Math.max(1, Math.floor(cellH / 4));
+
+            for (let sy = 0; sy < cellH; sy += sampleStepY) {
+              for (let sx = 0; sx < cellW; sx += sampleStepX) {
+                const px = Math.floor(x * cellW + sx);
+                const py = Math.floor(y * cellH + sy);
+                if (px < targetWidth && py < targetHeight) {
+                  const i = (py * targetWidth + px) * 4;
+                  const lum = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+                  if (lum < minLum) minLum = lum;
+                  if (lum > maxLum) maxLum = lum;
+                }
+              }
+            }
+            
+            const contrast = maxLum - minLum;
+            if (contrast > 80) {
+              const healthScore = Math.min(1, contrast / 200);
+              ctx.fillStyle = `rgba(16, 185, 129, ${healthScore * 0.15})`;
+              ctx.fillRect(Math.floor(x * cellW), Math.floor(y * cellH), Math.ceil(cellW), Math.ceil(cellH));
+            } else if (contrast < 30) {
+              ctx.fillStyle = `rgba(239, 68, 68, 0.05)`;
+              ctx.fillRect(Math.floor(x * cellW), Math.floor(y * cellH), Math.ceil(cellW), Math.ceil(cellH));
+            }
           }
         }
+        ctx.restore();
 
-        if (freeWorkerIdx !== -1) {
-          try {
-            const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
-            activeStates[freeWorkerIdx] = true;
-            nextWorkerIdxRef.current = (freeWorkerIdx + 1) % workers.length;
+        // Scan the canvas directly
+        QrScanner.scanImage(canvas, { qrEngine: qrEngineRef.current, returnDetailedScanResult: true })
+          .then((result: any) => {
+            isDecodingRef.current = false;
+            if (result && result.data) {
+              handleScannedCode(result.data);
+              
+              const containerWidth = video.clientWidth;
+              const containerHeight = video.clientHeight;
+              const videoRatio = video.videoWidth / video.videoHeight;
+              const containerRatio = containerWidth / containerHeight;
 
-            workers[freeWorkerIdx].postMessage({
-              data: imageData.data,
-              width: targetWidth,
-              height: targetHeight
-            }, [imageData.data.buffer]); // Transferable
-          } catch (err) {
-            console.error('Failed to submit frame to worker:', err);
-          }
-        }
+              let renderedWidth = containerWidth;
+              let renderedHeight = containerHeight;
+              let xOffset = 0;
+              let yOffset = 0;
+
+              if (containerRatio > videoRatio) {
+                renderedWidth = containerWidth;
+                renderedHeight = containerWidth / videoRatio;
+                yOffset = (containerHeight - renderedHeight) / 2;
+              } else {
+                renderedHeight = containerHeight;
+                renderedWidth = containerHeight * videoRatio;
+                xOffset = (containerWidth - renderedWidth) / 2;
+              }
+
+              const transformPoint = (p: { x: number; y: number }) => {
+                const normX = p.x / targetWidth;
+                const normY = p.y / targetHeight;
+                return {
+                  x: xOffset + normX * renderedWidth,
+                  y: yOffset + normY * renderedHeight,
+                };
+              };
+
+              if (result.cornerPoints && result.cornerPoints.length >= 3) {
+                const targetLocation = {
+                  topLeft: transformPoint(result.cornerPoints[0]),
+                  topRight: transformPoint(result.cornerPoints[1]),
+                  bottomRight: transformPoint(result.cornerPoints[2]),
+                  bottomLeft: transformPoint(result.cornerPoints[3] || result.cornerPoints[0]),
+                };
+                targetLocationRef.current = targetLocation;
+                lastDetectedTimeRef.current = Date.now();
+              }
+            }
+          })
+          .catch(() => {
+             // QrScanner returns an error when no QR is found, just ignore and reset flag
+             isDecodingRef.current = false;
+          });
       }
     }
 
