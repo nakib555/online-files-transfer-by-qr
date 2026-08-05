@@ -372,9 +372,9 @@ export default function SenderView() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-6 sm:px-12 animate-fade-in font-sans">
+    <div className="max-w-7xl mx-auto py-6 sm:py-12 px-4 sm:px-12 animate-fade-in font-sans">
       {isProcessing ? (
-        <div className="max-w-md mx-auto border border-slate-200 bg-white p-8 sm:p-10 rounded-[2rem] flex flex-col items-center justify-center space-y-6 text-center shadow-xl shadow-indigo-900/5">
+        <div className="max-w-md mx-auto border border-slate-200 bg-white p-6 sm:p-10 rounded-2xl sm:rounded-3xl flex flex-col items-center justify-center space-y-6 text-center shadow-xl shadow-indigo-900/5">
           <RefreshCw className="w-12 h-12 text-indigo-500 animate-spin" />
           <div className="space-y-4 w-full">
             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">{processingStatus}</h3>
@@ -388,10 +388,10 @@ export default function SenderView() {
           </div>
         </div>
       ) : !file ? (
-        <div className="space-y-8 max-w-2xl mx-auto">
-          <div className="text-center mb-8">
-            <h2 className="text-4xl font-display font-bold text-slate-900 tracking-tight mb-3">Transmitter Configuration</h2>
-            <p className="text-slate-500">
+        <div className="space-y-6 sm:space-y-8 max-w-2xl mx-auto">
+          <div className="text-center mb-6 sm:mb-8">
+            <h2 className="text-3xl sm:text-4xl font-display font-bold text-slate-900 tracking-tight mb-2 sm:mb-3">Transmitter Configuration</h2>
+            <p className="text-sm sm:text-base text-slate-500">
               Select or drag a file to convert it into an optical sequence.
             </p>
           </div>
@@ -401,18 +401,18 @@ export default function SenderView() {
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}
-            className={`border-2 border-dashed rounded-[2rem] p-16 flex flex-col items-center justify-center transition-all ${
+            className={`border-2 border-dashed rounded-2xl sm:rounded-3xl p-6 sm:p-12 md:p-16 flex flex-col items-center justify-center transition-all ${
               isDragging 
                 ? 'border-indigo-500 bg-indigo-50 shadow-[0_0_40px_rgba(99,102,241,0.15)] scale-[1.02]' 
                 : 'border-slate-200 bg-white hover:border-indigo-200 hover:shadow-lg'
             }`}
           >
-            <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mb-6 transition-all ${isDragging ? 'bg-indigo-100 text-indigo-600 scale-110' : 'bg-slate-50 text-slate-400'}`}>
-               <Upload className="w-10 h-10" />
+            <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl flex items-center justify-center mb-4 sm:mb-6 transition-all ${isDragging ? 'bg-indigo-100 text-indigo-600 scale-110' : 'bg-slate-50 text-slate-400'}`}>
+               <Upload className="w-8 h-8 sm:w-10 sm:h-10" />
             </div>
-            <h3 className="text-xl font-display font-bold text-slate-900 mb-2">Drop your file here</h3>
-            <p className="text-sm text-slate-500 mb-6 text-center max-w-sm">Support for any file format, converting into highly resilient QR frames</p>
-            <label className="bg-slate-900 hover:bg-slate-800 text-white text-sm px-6 py-3 rounded-full font-semibold tracking-wide cursor-pointer transition-all shadow-md hover:shadow-xl hover:-translate-y-0.5">
+            <h3 className="text-lg sm:text-xl font-display font-bold text-slate-900 mb-1 sm:mb-2">Drop your file here</h3>
+            <p className="text-xs sm:text-sm text-slate-500 mb-4 sm:mb-6 text-center max-w-sm">Support for any file format, converting into highly resilient QR frames</p>
+            <label className="bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm px-5 py-2.5 sm:px-6 sm:py-3 rounded-full font-semibold tracking-wide cursor-pointer transition-all shadow-md hover:shadow-xl hover:-translate-y-0.5">
               Select File Manually
               <input
                 type="file"
@@ -444,7 +444,7 @@ export default function SenderView() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
           {/* Left Column: QR Code Display Container */}
           <div className="lg:col-span-6 flex flex-col gap-6">
-            <div className="w-full border border-slate-200 bg-white rounded-[2rem] p-6 sm:p-8 relative overflow-hidden flex flex-col items-center shadow-sm">
+            <div className="w-full border border-slate-200 bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 relative overflow-hidden flex flex-col items-center shadow-sm">
               {/* Corner Indicators */}
               <div className="absolute top-3 left-3 w-4 h-4 border-t-2 border-l-2 border-indigo-600/40"></div>
               <div className="absolute top-3 right-3 w-4 h-4 border-t-2 border-r-2 border-indigo-600/40"></div>
@@ -459,7 +459,7 @@ export default function SenderView() {
               )}
 
               {/* QR Canvas */}
-              <div className="bg-white p-4 w-full max-w-md aspect-square rounded-[2rem] shadow-2xl shadow-indigo-900/5 relative flex justify-center items-center group border border-slate-100">
+              <div className="bg-white p-4 w-full max-w-md aspect-square rounded-2xl sm:rounded-3xl shadow-2xl shadow-indigo-900/5 relative flex justify-center items-center group border border-slate-100">
                 {/* Non-Destructive Outer Laser-Lock Target Selection Outer Frame */}
                 {isLaserLockActive && (
                   <div className="absolute -inset-3 pointer-events-none z-20 rounded-xl border-2 border-red-500/80 shadow-[0_0_25px_rgba(239,68,68,0.35)] transition-all duration-300">
@@ -515,7 +515,7 @@ export default function SenderView() {
             </div>
 
             {/* Live Stats Diagnostics */}
-            <div className="w-full border border-slate-200 bg-white p-6 sm:p-8 rounded-[2rem] space-y-6 shadow-sm">
+            <div className="w-full border border-slate-200 bg-white p-6 sm:p-8 rounded-2xl sm:rounded-3xl space-y-6 shadow-sm">
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
@@ -560,18 +560,18 @@ export default function SenderView() {
             </div>
 
             {/* Playback Controls Panel */}
-            <div className="w-full border border-slate-200 bg-white p-6 rounded-[2rem] flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-3">
+            <div className="w-full border border-slate-200 bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl flex flex-col sm:flex-row gap-4 items-stretch sm:items-center sm:justify-between shadow-sm">
+              <div className="flex items-center justify-center gap-2 sm:gap-3">
                 <button
                   onClick={stepPrev}
-                  className="p-4 rounded-2xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-500 hover:text-indigo-600 transition-all cursor-pointer shadow-sm hover:shadow"
+                  className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-500 hover:text-indigo-600 transition-all cursor-pointer shadow-sm hover:shadow"
                   title="Previous Frame"
                 >
-                  <SkipBack className="w-6 h-6" />
+                  <SkipBack className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
                 <button
                   onClick={togglePlayback}
-                  className={`px-10 py-4 rounded-2xl flex items-center gap-3 font-display font-bold tracking-wide cursor-pointer text-base transition-all shadow-md hover:shadow-xl hover:-translate-y-1 border ${
+                  className={`flex-1 sm:flex-initial px-6 sm:px-10 py-3 sm:py-4 rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 sm:gap-3 font-display font-bold tracking-wide cursor-pointer text-sm sm:text-base transition-all shadow-md hover:shadow-xl hover:-translate-y-1 border ${
                     isPlaying
                       ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300'
                       : 'bg-indigo-600 text-white hover:bg-indigo-500 border-indigo-700'
@@ -579,38 +579,38 @@ export default function SenderView() {
                 >
                   {isPlaying ? (
                     <>
-                      <Pause className="w-5 h-5 fill-amber-900" /> Pause Transfer
+                      <Pause className="w-4 h-4 sm:w-5 sm:h-5 fill-amber-900" /> Pause Transfer
                     </>
                   ) : (
                     <>
-                      <Play className="w-5 h-5 fill-white" /> Start Transfer
+                      <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-white" /> Start Transfer
                     </>
                   )}
                 </button>
                 <button
                   onClick={stepNext}
-                  className="p-4 rounded-2xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-500 hover:text-indigo-600 transition-all cursor-pointer shadow-sm hover:shadow"
+                  className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-500 hover:text-indigo-600 transition-all cursor-pointer shadow-sm hover:shadow"
                   title="Next Frame"
                 >
-                  <SkipForward className="w-6 h-6" />
+                  <SkipForward className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center gap-2 sm:gap-3">
                 <button
                   onClick={handleReset}
-                  className="p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
+                  className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
                   title="Reset Sequence"
                 >
                   <RefreshCw className="w-5 h-5" />
                 </button>
                 <button
                   onClick={() => {
-                    setFile(null);
-                    setTotalChunksCount(0);
-                    setComputedCrc32('');
+                     setFile(null);
+                     setTotalChunksCount(0);
+                     setComputedCrc32('');
                   }}
-                  className="text-sm font-bold border-2 border-slate-200 hover:border-red-200 bg-white text-slate-500 hover:bg-red-50 hover:text-red-600 px-6 py-4 rounded-2xl transition-colors cursor-pointer"
+                  className="text-xs sm:text-sm font-bold border-2 border-slate-200 hover:border-red-200 bg-white text-slate-500 hover:bg-red-50 hover:text-red-600 px-4 py-3 sm:px-6 sm:py-4 rounded-xl sm:rounded-2xl transition-colors cursor-pointer"
                 >
                   Eject Media
                 </button>
@@ -621,7 +621,7 @@ export default function SenderView() {
           {/* Right Column: File Details & Transmission Tuning Panel */}
           <div className="lg:col-span-6 space-y-6">
             {/* File Info Card */}
-            <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-[2rem] space-y-6 shadow-sm">
+            <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-2xl sm:rounded-3xl space-y-6 shadow-sm">
               <div className="flex items-start gap-4">
                 <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-600">
                   {batchCount > 0 ? <FileArchive className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
@@ -699,7 +699,7 @@ export default function SenderView() {
             </div>
 
             {/* Auto-Adaptive Calibration Dashboard */}
-            <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-[2rem] space-y-6 shadow-sm">
+            <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-2xl sm:rounded-3xl space-y-6 shadow-sm">
               <div className="flex items-center justify-between pb-2">
                 <div className="flex items-center gap-3">
                   <div className="p-1.5 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-500">
@@ -785,7 +785,7 @@ export default function SenderView() {
             </div>
 
             {/* Laser-Lock Targeting Feedback System */}
-            <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-[2rem] space-y-4 shadow-sm">
+            <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-2xl sm:rounded-3xl space-y-4 shadow-sm">
               <div className="flex items-center justify-between pb-2">
                 <div className="flex items-center gap-3">
                   <div className={`p-1.5 rounded-lg ${isLaserLockActive ? 'bg-red-50 text-red-500' : 'bg-slate-50 text-slate-400'}`}>
@@ -829,7 +829,7 @@ export default function SenderView() {
             </div>
 
             {/* Auto-Correction Status Card */}
-            <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-[2rem] space-y-4 shadow-sm">
+            <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-2xl sm:rounded-3xl space-y-4 shadow-sm">
               <div className="flex items-center justify-between pb-2">
                 <div className="flex items-center gap-3">
                   <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-500">
@@ -857,7 +857,7 @@ export default function SenderView() {
             </div>
 
             {/* Transmission Presets Configuration */}
-            <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-[2rem] space-y-6 shadow-sm">
+            <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-2xl sm:rounded-3xl space-y-6 shadow-sm">
               <div className="flex items-center gap-3 pb-2">
                 <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-500">
                   <Sliders className="w-5 h-5" />

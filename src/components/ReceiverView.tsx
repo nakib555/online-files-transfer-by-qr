@@ -889,7 +889,7 @@ export default function ReceiverView() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-6 sm:px-12 animate-fade-in font-sans space-y-8">
+    <div className="max-w-7xl mx-auto py-6 sm:py-12 px-4 sm:px-12 animate-fade-in font-sans space-y-6 sm:space-y-8">
       <div className="text-center mb-4">
         <h2 className="text-4xl font-display font-bold text-slate-900 tracking-tight mb-3">Receiver Scanner</h2>
         <p className="text-slate-500">
@@ -900,12 +900,12 @@ export default function ReceiverView() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
         {/* Left Column: Viewfinder camera feed */}
         <div className="lg:col-span-6 flex flex-col gap-6">
-          <div className="w-full border border-slate-200 bg-white rounded-[2rem] p-6 sm:p-8 relative overflow-hidden flex flex-col items-center shadow-sm">
+          <div className="w-full border border-slate-200 bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 relative overflow-hidden flex flex-col items-center shadow-sm">
             {/* Hidden Canvas used for frame processing */}
             <canvas ref={canvasRef} className="hidden" />
 
             {/* Video Feed */}
-            <div className="relative w-full max-w-md aspect-[4/3] sm:aspect-video lg:aspect-[4/3] bg-slate-900 border-[8px] border-slate-900 rounded-[2rem] overflow-hidden flex items-center justify-center mx-auto shadow-2xl shadow-indigo-900/10">
+            <div className="relative w-full max-w-md aspect-[4/3] sm:aspect-video lg:aspect-[4/3] bg-slate-900 border-4 sm:border-[8px] border-slate-900 rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center mx-auto shadow-2xl shadow-indigo-900/10">
               {/* Viewfinder Target Reticle - strictly inside the viewfinder to prevent overlapping layout anomalies */}
               <div className="absolute top-4 left-4 w-8 h-8 border-t-4 border-l-4 rounded-tl-xl border-indigo-500 z-10 animate-pulse opacity-50"></div>
               <div className="absolute top-4 right-4 w-8 h-8 border-t-4 border-r-4 rounded-tr-xl border-indigo-500 z-10 animate-pulse opacity-50"></div>
@@ -1251,10 +1251,10 @@ export default function ReceiverView() {
                 </div>
               )}
 
-              <div className="flex gap-3">
+              <div className="flex gap-2 sm:gap-3">
                 <button
                   onClick={handleToggleScanning}
-                  className={`flex-1 py-4 px-6 rounded-2xl font-display font-bold tracking-wide text-base cursor-pointer transition-all flex items-center justify-center gap-3 shadow-sm hover:-translate-y-1 hover:shadow-md border ${
+                  className={`flex-1 py-3 sm:py-4 px-3 sm:px-6 rounded-xl sm:rounded-2xl font-display font-bold tracking-wide text-sm sm:text-base cursor-pointer transition-all flex items-center justify-center gap-2 sm:gap-3 shadow-sm hover:-translate-y-1 hover:shadow-md border ${
                     isScanning
                       ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300'
                       : 'bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-700'
@@ -1262,26 +1262,26 @@ export default function ReceiverView() {
                 >
                   {isScanning ? (
                     <>
-                      <Pause className="w-5 h-5 fill-amber-900" /> Deactivate Scanner
+                      <Pause className="w-4 h-4 sm:w-5 sm:h-5 fill-amber-900" /> Deactivate Scanner
                     </>
                   ) : (
                     <>
-                      <Play className="w-5 h-5 fill-white" /> Activate Scanner
+                      <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-white" /> Activate Scanner
                     </>
                   )}
                 </button>
                 <button
                   onClick={handleReset}
-                  className="px-6 border-2 border-slate-200 hover:border-red-200 bg-white hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-2xl cursor-pointer transition-all shadow-sm flex items-center justify-center"
+                  className="px-4 sm:px-6 border-2 border-slate-200 hover:border-red-200 bg-white hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-xl sm:rounded-2xl cursor-pointer transition-all shadow-sm flex items-center justify-center"
                   title="Wipe Session Data"
                 >
-                  <RefreshCw className="w-5 h-5" />
+                  <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               </div>
             </div>
 
             {/* Live Stats Diagnostics */}
-            <div className="w-full border border-slate-200 bg-white p-6 rounded-[2rem] space-y-6 shadow-sm">
+            <div className="w-full border border-slate-200 bg-white p-6 rounded-2xl sm:rounded-3xl space-y-6 shadow-sm">
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
@@ -1302,7 +1302,7 @@ export default function ReceiverView() {
             </div>
 
             {/* Auto-Correction Status Card */}
-            <div className="w-full border border-slate-200 bg-white p-6 rounded-[2rem] space-y-4 shadow-sm">
+            <div className="w-full border border-slate-200 bg-white p-6 rounded-2xl sm:rounded-3xl space-y-4 shadow-sm">
               <div className="flex items-center justify-between pb-2">
                 <div className="flex items-center gap-3">
                   <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-500">
@@ -1334,7 +1334,7 @@ export default function ReceiverView() {
         {/* Right Column: Real-time Stats & Chunk Map */}
         <div className="lg:col-span-6 space-y-6">
           {/* Metadata Card */}
-          <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-[2rem] space-y-6 shadow-sm">
+          <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-2xl sm:rounded-3xl space-y-6 shadow-sm">
             <div className="flex justify-between items-center pb-4 border-b border-slate-100">
               <h3 className="text-lg font-display font-bold text-slate-900 tracking-tight">Optical Payload Profile</h3>
               <div className="flex items-center gap-2">
@@ -1398,7 +1398,7 @@ export default function ReceiverView() {
 
           {/* Saved Sessions Backlog */}
           {!metadata && savedSessions.length > 0 && (
-            <div className="border border-slate-200 bg-white p-6 rounded-[2rem] space-y-4 shadow-sm">
+            <div className="border border-slate-200 bg-white p-6 rounded-2xl sm:rounded-3xl space-y-4 shadow-sm">
               <div className="flex justify-between items-center pb-3 border-b border-slate-100">
                 <span className="text-sm font-bold text-slate-800 uppercase tracking-wide">Incomplete Transfers / Backlogs</span>
                 <span className="text-[10px] px-2 py-1 bg-amber-50 text-amber-600 rounded font-extrabold animate-pulse uppercase tracking-widest">Resumable</span>
@@ -1447,12 +1447,12 @@ export default function ReceiverView() {
           )}
 
           {/* Assembly grid */}
-          <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-[2rem] shadow-sm">
+          <div className="border border-slate-200 bg-white p-6 sm:p-8 rounded-2xl sm:rounded-3xl shadow-sm">
             {renderChunksGrid()}
           </div>
 
           {/* Real-time Logger Terminal */}
-          <div className="border border-slate-200 bg-white p-6 rounded-[2rem] space-y-4 shadow-sm">
+          <div className="border border-slate-200 bg-white p-6 rounded-2xl sm:rounded-3xl space-y-4 shadow-sm">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
               <span className="text-sm font-bold text-slate-700 uppercase tracking-wide">Security Sandbox Logs</span>
               <span className="text-[10px] px-2 py-1 bg-slate-100 rounded text-slate-500 font-bold uppercase tracking-widest">LIVESTREAM</span>
